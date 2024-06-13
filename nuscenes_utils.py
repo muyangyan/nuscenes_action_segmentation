@@ -159,7 +159,7 @@ class Scene:
 
         self.actions.append({'label':'END', 'time':self.data[len(self.data)-1]['time']})
 
-    def plot_actions(self):
+    def plot_actions(self, features=None):
 
         # create action periods
         colors = {'stop':'red', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta'}
@@ -176,11 +176,12 @@ class Scene:
         # choose feature keys
 
         #all
-        feature_keys = list(set().union(*(d.keys() for d in self.data)))
-        feature_keys.remove(xlabel)  # Remove 'time' key
-        feature_keys.remove('token')  # Remove 'token' key
-        if 'map' in feature_keys:
-            feature_keys.remove('map')  # Remove 'token' key
+        if features is None:
+            feature_keys = list(set().union(*(d.keys() for d in self.data)))
+            feature_keys.remove(xlabel)  # Remove 'time' key
+            feature_keys.remove('token')  # Remove 'token' key
+            if 'map' in feature_keys:
+                feature_keys.remove('map')  # Remove 'token' key
 
         # Create a figure with subplots
         num_subplots = len(feature_keys)
@@ -221,7 +222,7 @@ class Scene:
         for d in self.data:
 
             #get the current action
-            if d['time'] > self.actions[j]['time'] and j < len(self.actions)-2:
+            if d['time'] > self.actions[j]['time'] and j < len(self.actions):
                 j+=1
             
             action = self.actions[0]
@@ -233,6 +234,7 @@ class Scene:
             patch = (x-radius, y-radius, x+radius, y+radius)
             fig, ax = self.map.render_map_patch(patch, layers, figsize=(6, 5))
             ax.scatter(x, y, color=colors[action['label']], marker='o', s=40)
+            ax.annotate(action['label'], (x, y))
 
             #add frame to gif
             fig.canvas.draw()
