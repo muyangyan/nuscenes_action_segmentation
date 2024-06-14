@@ -46,6 +46,10 @@ class Scene:
         map_records = self.map.get_records_in_radius(x, y, radius, layers, mode='intersect')
         return map_records
 
+    # handle action dictionary object
+    def is_turn(self, action):
+        return 'turn' in action['label']
+
     '''
     METHODS======================================================================
     '''
@@ -121,12 +125,13 @@ class Scene:
             self.add_map_data()
         self.convert_utime_secs()
 
-    def segment(self, straight_thresh=0.7, coast_thresh=0.1, stop_thresh=0.05):
-        self.actions = []
+    def segment_actions(self, straight_thresh=0.7, coast_thresh=0.1, stop_thresh=0.05, primitive=False):
+        actions = []
 
         last_speed = self.data[0]['vel']
         last_time = self.data[0]['time']
 
+        #frame by frame primitive labeling
         for d in self.data:
             action = 'none'
             speed = d['vel']
@@ -135,8 +140,10 @@ class Scene:
             steer = d['steer']
             time = d['time']
 
-            if speed < stop_thresh:
+            if abs(speed) < stop_thresh:
                 action = 'stop'
+            elif speed < 0:
+                action = 'back'
             else:
                 if abs(steer) < straight_thresh:
                     if abs(d_speed) < coast_thresh:
@@ -150,19 +157,36 @@ class Scene:
                 elif steer < 0:
                     action = 'turn right'
 
-            if not self.actions or self.actions[len(self.actions)-1]['label'] != action:
-                self.actions.append({'label':action, 'time':last_time})
+            if not actions or actions[len(actions)-1]['label'] != action:
+                actions.append({'label':action, 'time':last_time})
 
             #update bookkeeping
             last_speed = speed
             last_time = time
 
-        self.actions.append({'label':'END', 'time':self.data[len(self.data)-1]['time']})
+        actions.append({'label':'END', 'time':self.data[len(self.data)-1]['time']})
+
+        if primitive:
+            self.actions = actions
+            return
+        
+        #check for rich actions
+        rich_actions = []
+        for i, start in enumerate(actions[:len(actions)-1]):
+            #uturns
+            if self.is_turn(start):
+                for k, last in enumerate(actions[i:]):
+                    #last is the last action within the two endpoint timestamps
+                    #end is the action starting at the latter endpoint timestamp
+                    end = actions[i+k+1]
+                    if last['label'] == start['label']:
+                        pass
+
 
     def plot_actions(self, features=None):
 
         # create action periods
-        colors = {'stop':'red', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta'}
+        colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'u turn':'cyan'}
         periods = []
         for i in range(len(self.actions)-1):
             from_time = self.actions[i]['time']
