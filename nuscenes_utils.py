@@ -1,12 +1,20 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import imageio
+import copy
+from pyquaternion import Quaternion
+
+from nuscenes.eval.common.utils import quaternion_yaw
+from nuscenes.map_expansion import arcline_path_utils
+
 
 from nuscenes.nuscenes import NuScenes
 from nuscenes.map_expansion.map_api import NuScenesMap
 from nuscenes.can_bus.can_bus_api import NuScenesCanBus
 
 dataroot='/data/Datasets/nuscenes'
+
+colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane':'Salmon'}
 
 nusc = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
 nusc_map_so = NuScenesMap(dataroot=dataroot, map_name='singapore-onenorth')
@@ -30,7 +38,8 @@ class Scene:
         self.scene_token = scene['token']
         self.map = maps[map_location]
         self.data = None
-        self.actions = []
+        self.rich_actions = []
+        self.prim_actions = []
 
     '''
     HELPERS======================================================================
@@ -116,27 +125,47 @@ class Scene:
             d['map'] = self.query_map(x, y, radius, layers)
 
     '''
+    adds closest lane 
+    '''
+    def add_lane_data(self, radius):
+        for d in self.data:
+            x = d['pos'][0]
+            y = d['pos'][1]
+
+            o = Quaternion(d['orientation'])
+            yaw = quaternion_yaw(o)
+            closest_lane = self.map.get_closest_lane(x, y, radius=radius)
+            lane_record = self.map.get_arcline_path(closest_lane)
+            closest_pose_on_lane, distance_along_lane = arcline_path_utils.project_pose_to_lane((x, y, yaw), lane_record)
+            lane_point = np.array(closest_pose_on_lane[:2])
+            car_point = np.array([x,y])
+            dist = np.linalg.norm(lane_point - car_point)
+
+            d['dist_centerline'] = dist
+            d['closest_lane'] = closest_lane
+
+    '''
     extracts all data we want from all nuscenes expansions
     '''
-    def extract_data(self, map=False):
+    def extract_data(self, map=False, radius=10):
         self.extract_core_data()
         self.add_CAN_data()
+        self.add_lane_data(radius)
         if map:
-            self.add_map_data()
+            self.add_map_data(radius, self.map.non_geometric_layers)
         self.convert_utime_secs()
 
-    def segment_actions(self, straight_thresh=0.7, coast_thresh=0.1, stop_thresh=0.05, primitive=False):
+    def segment_actions(self, straight_thresh=0.7, coast_thresh=0.1, stop_thresh=0.05, uturn_thresh=0.3, uturn_radius=15, centerline_thresh=1, primitive=False):
         actions = []
 
-        last_speed = self.data[0]['vel']
-        last_time = self.data[0]['time']
 
         #frame by frame primitive labeling
-        for d in self.data:
+        for i, d in enumerate(self.data[:len(self.data)-1]):
+            next_speed = self.data[i+1]['vel']
             action = 'none'
             speed = d['vel']
             #acceleration = np.linalg.norm(np.array(d['accel'])) #TODO: dot with orientation
-            d_speed = speed - last_speed
+            d_speed = next_speed - speed
             steer = d['steer']
             time = d['time']
 
@@ -158,40 +187,121 @@ class Scene:
                     action = 'turn right'
 
             if not actions or actions[len(actions)-1]['label'] != action:
-                actions.append({'label':action, 'time':last_time})
+                actions.append({'label':action, 'index':i, 'time':time})
 
-            #update bookkeeping
-            last_speed = speed
-            last_time = time
+        actions.append({'label':'END', 'index':len(self.data)-1, 'time':self.data[len(self.data)-1]['time']})
 
-        actions.append({'label':'END', 'time':self.data[len(self.data)-1]['time']})
+        self.prim_actions = copy.deepcopy(actions)
 
         if primitive:
-            self.actions = actions
             return
         
         #check for rich actions
-        rich_actions = []
-        for i, start in enumerate(actions[:len(actions)-1]):
-            #uturns
+        rich_actions = copy.deepcopy(actions)
+        #uturns
+        i = 0
+        while i < len(actions)-1:
+            start = actions[i]
             if self.is_turn(start):
-                for k, last in enumerate(actions[i:]):
+                for k, last in enumerate(actions[i:len(actions)-1]):
                     #last is the last action within the two endpoint timestamps
                     #end is the action starting at the latter endpoint timestamp
                     end = actions[i+k+1]
+                    #check that start and last are both turns in the same direction
                     if last['label'] == start['label']:
-                        pass
+                        #check for 180 direction difference
+                        o1 = Quaternion(self.data[start['index']]['orientation'])
+                        o2 = Quaternion(self.data[end['index']]['orientation'])
+                        q1 = quaternion_yaw(o1)
+                        q2 = quaternion_yaw(o2)
+                        diff = abs(q1 - q2)
+
+                        if abs(diff-np.pi) < uturn_thresh:
+                            #loop through all keyframes in between to make sure car didn't move too much
+
+                            valid = True
+                            start_pos = np.array(self.data[start['index']]['pos'][:2])
+                            for d in self.data[start['index']:end['index']]:
+                                pos = np.array(d['pos'][:2])
+                                if np.linalg.norm(start_pos - pos) > uturn_radius:
+                                    valid = False
+                                    break
+
+                            if valid:
+                                rich_actions[i]['label'] = 'uturn'
+                                print("UTURN:", self.scene_name)
+                                d_i = 0
+                                while rich_actions[i+1] != end:
+                                    d_i+=1
+                                    del rich_actions[i+1]
+                                i+=d_i
+                                break
+                #if breaker:
+                #    break
+            i+=1
+        
+        #lane changes
+        i = 0
+        while i < len(self.data)-1:
+            d = self.data[i]
+            next = self.data[i+1]
+            if d['closest_lane'] != next['closest_lane']:
+                #found cross point, check that distances to each lane is less than width thresh
+                if d['dist_centerline'] > centerline_thresh and next['dist_centerline'] > centerline_thresh:
+                    #propogate in each direction
+                    j = i+1
+                    k = i
+
+                    while j < len(self.data)-1 and self.data[j+1]['dist_centerline'] < self.data[j]['dist_centerline']:
+                        j+=1
+                    while k > 0 and self.data[k-1]['dist_centerline'] < self.data[k]['dist_centerline']:
+                        k-=1
+                    print("LANE_CHANGE\n", "index: [", k, j, "]", "time: [", self.data[k]['time'], self.data[j]['time'], "]")
+
+                    #add lane change to actions
+                    right_posted = False
+                    left_posted = False
+                    for l in reversed(range(len(rich_actions)-1)): # consider length of range
+                        if rich_actions[l]['index'] <= j and not right_posted:
+                            right_posted = True
+                            right_action = {'label':rich_actions[l]['label'], 'index':j, 'time':self.data[j]['time']}
+                            rich_actions[l] = right_action
+                            continue
+                        if rich_actions[l]['index'] <= k and not left_posted:
+                            left_posted = True
+                            left_action = {'label':'change lane', 'index':k, 'time':self.data[k]['time']}
+                            if rich_actions[l]['index'] == k:
+                                rich_actions[l] = left_action
+                            else:
+                                rich_actions.insert(l+1, left_action)
+                            continue
+                        if right_posted and not left_posted:
+                            del rich_actions[l]
+                        
+                    '''
+                    c = test_list.count(item) 
+                    for i in range(c): 
+                        test_list.remove(item) 
+                    '''
+
+                    i = j-1
+            i+=1
+
+        self.rich_actions = rich_actions
 
 
-    def plot_actions(self, features=None):
+    def plot_actions(self, features=None, primitive=False):
 
+        actions = self.rich_actions
+        if primitive:
+            actions = self.prim_actions
+        
         # create action periods
-        colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'u turn':'cyan'}
         periods = []
-        for i in range(len(self.actions)-1):
-            from_time = self.actions[i]['time']
-            to_time = self.actions[i+1]['time']
-            color = colors[self.actions[i]['label']]
+        for i in range(len(actions)-1):
+            from_time = actions[i]['time']
+            to_time = actions[i+1]['time']
+            color = colors[actions[i]['label']]
             periods.append((from_time, to_time, color))
         print(periods)
 
@@ -206,6 +316,8 @@ class Scene:
             feature_keys.remove('token')  # Remove 'token' key
             if 'map' in feature_keys:
                 feature_keys.remove('map')  # Remove 'token' key
+            if 'closest_lane' in feature_keys:
+                feature_keys.remove('closest_lane')  # Remove 'token' key
 
         # Create a figure with subplots
         num_subplots = len(feature_keys)
@@ -239,19 +351,24 @@ class Scene:
     render into a gif on th map
     data list must contain map field
     '''
-    def render_actions_map(self, filename, radius=10, layers=nusc_map_so.non_geometric_layers):
-        colors = {'stop':'red', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta'}
+    def render_actions_map(self, filename, radius=10, layers=nusc_map_so.non_geometric_layers, primitive=False):
+
+        #TODO: check for adverse effects of fixing indexing
+        actions = self.rich_actions
+        if primitive:
+            actions = self.prim_actions
+        
         frames = []
         j = 0
         for d in self.data:
 
             #get the current action
-            if d['time'] > self.actions[j]['time'] and j < len(self.actions):
+            if d['time'] > actions[j]['time'] and j < len(actions):
                 j+=1
             
-            action = self.actions[0]
+            action = actions[0]
             if j > 0:
-                action = self.actions[j-1]
+                action = actions[j-1]
 
             x = d['pos'][0]
             y = d['pos'][1]
