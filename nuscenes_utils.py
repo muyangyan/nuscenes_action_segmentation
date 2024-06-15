@@ -150,9 +150,9 @@ class Scene:
     def extract_data(self, map=False, radius=10):
         self.extract_core_data()
         self.add_CAN_data()
-        self.add_lane_data(radius)
         if map:
-            self.add_map_data(radius, self.map.non_geometric_layers)
+            self.add_lane_data(radius)
+            #self.add_map_data(radius, self.map.non_geometric_layers)
         self.convert_utime_secs()
 
     def segment_actions(self, straight_thresh=0.7, coast_thresh=0.1, stop_thresh=0.05, uturn_thresh=0.3, uturn_radius=15, centerline_thresh=1, primitive=False):
