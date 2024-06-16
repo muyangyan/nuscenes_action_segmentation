@@ -4,7 +4,7 @@ import imageio
 import copy
 from pyquaternion import Quaternion
 
-from nuscenes.eval.common.utils import quaternion_yaw
+from nuscenes.eval.common.utils import quaternion_yaw, angle_diff
 from nuscenes.map_expansion import arcline_path_utils
 
 
@@ -54,10 +54,6 @@ class Scene:
     def query_map(self, x, y, radius, layers):
         map_records = self.map.get_records_in_radius(x, y, radius, layers, mode='intersect')
         return map_records
-
-    # handle action dictionary object
-    def is_turn(self, action):
-        return 'turn' in action['label']
 
     '''
     METHODS======================================================================
@@ -144,12 +140,26 @@ class Scene:
             d['dist_centerline'] = dist
             d['closest_lane'] = closest_lane
 
+    def add_ann_data(self):
+        for d in self.data:
+            sample = nusc.get('sample', d['token'])
+            d['anns'] = []
+            for ann_token in sample['anns']:
+                ann = nusc.get('sample_annotation', ann_token)
+                x = ann['translation'][0]
+                y = ann['translation'][1]
+                category = ann['category_name']
+                d['anns'].append({'category':category ,'pos':(x,y)})
+                #ax.scatter(x, y, color='m', marker='o', s=40)
+                #ax.annotate(category, (x, y))
+
     '''
     extracts all data we want from all nuscenes expansions
     '''
     def extract_data(self, map=False, radius=10):
         self.extract_core_data()
         self.add_CAN_data()
+        self.add_ann_data()
         if map:
             self.add_lane_data(radius)
             #self.add_map_data(radius, self.map.non_geometric_layers)
@@ -202,7 +212,8 @@ class Scene:
         i = 0
         while i < len(actions)-1:
             start = actions[i]
-            if self.is_turn(start):
+            #if self.is_turn(start):
+            if 'turn' in start['label']:
                 for k, last in enumerate(actions[i:len(actions)-1]):
                     #last is the last action within the two endpoint timestamps
                     #end is the action starting at the latter endpoint timestamp
@@ -210,13 +221,11 @@ class Scene:
                     #check that start and last are both turns in the same direction
                     if last['label'] == start['label']:
                         #check for 180 direction difference
-                        o1 = Quaternion(self.data[start['index']]['orientation'])
-                        o2 = Quaternion(self.data[end['index']]['orientation'])
-                        q1 = quaternion_yaw(o1)
-                        q2 = quaternion_yaw(o2)
-                        diff = abs(q1 - q2)
+                        yaw1 = quaternion_yaw(Quaternion(self.data[start['index']]['orientation']))
+                        yaw2 = quaternion_yaw(Quaternion(self.data[end['index']]['orientation']))
+                        diff = abs(angle_diff(yaw1, yaw2, np.pi*2))
 
-                        if abs(diff-np.pi) < uturn_thresh:
+                        if abs(diff - np.pi) < uturn_thresh:
                             #loop through all keyframes in between to make sure car didn't move too much
 
                             valid = True
@@ -258,6 +267,13 @@ class Scene:
                         k-=1
                     print("LANE_CHANGE\n", "index: [", k, j, "]", "time: [", self.data[k]['time'], self.data[j]['time'], "]")
 
+                    start_direction = quaternion_yaw(Quaternion(self.data[k]['orientation']))
+                    mid_direction = quaternion_yaw(Quaternion(self.data[(k+j)//2]['orientation']))
+                    if angle_diff(mid_direction, start_direction, np.pi*2) > 0:
+                        direction = 'left'
+                    else:
+                        direction = 'right'
+
                     #add lane change to actions
                     right_posted = False
                     left_posted = False
@@ -269,7 +285,7 @@ class Scene:
                             continue
                         if rich_actions[l]['index'] <= k and not left_posted:
                             left_posted = True
-                            left_action = {'label':'change lane', 'index':k, 'time':self.data[k]['time']}
+                            left_action = {'label':'change lane %s' % direction, 'index':k, 'time':self.data[k]['time']}
                             if rich_actions[l]['index'] == k:
                                 rich_actions[l] = left_action
                             else:
@@ -283,9 +299,20 @@ class Scene:
                     for i in range(c): 
                         test_list.remove(item) 
                     '''
-
                     i = j-1
             i+=1
+        
+        '''
+        #overtakes
+        lane_changes = [i for i in rich_actions if i['label'] == 'change lane']
+        for i,action in enumerate(lane_changes-1): 
+            #check if the two lane changes are in opposite directions
+            if action['label'] != lane_changes[i+1]['label']:
+                if 
+        '''
+
+                
+                
 
         self.rich_actions = rich_actions
 
@@ -318,6 +345,8 @@ class Scene:
                 feature_keys.remove('map')  # Remove 'token' key
             if 'closest_lane' in feature_keys:
                 feature_keys.remove('closest_lane')  # Remove 'token' key
+            if 'anns' in feature_keys:
+                feature_keys.remove('anns')  # Remove 'token' key
 
         # Create a figure with subplots
         num_subplots = len(feature_keys)
@@ -376,6 +405,14 @@ class Scene:
             fig, ax = self.map.render_map_patch(patch, layers, figsize=(6, 5))
             ax.scatter(x, y, color=colors[action['label']], marker='o', s=40)
             ax.annotate(action['label'], (x, y))
+
+            #render other objects
+            for ann in d['anns']:
+                x = ann['pos'][0]
+                y = ann['pos'][1]
+                category = ann['category']
+                ax.scatter(x, y, color='m', marker='o', s=40)
+                ax.annotate(category, (x, y))
 
             #add frame to gif
             fig.canvas.draw()
