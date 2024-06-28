@@ -14,7 +14,7 @@ from nuscenes.can_bus.can_bus_api import NuScenesCanBus
 
 dataroot='/data/Datasets/nuscenes'
 
-colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane':'Salmon'}
+colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine'} 
 
 nusc = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
 nusc_map_so = NuScenesMap(dataroot=dataroot, map_name='singapore-onenorth')
@@ -54,6 +54,26 @@ class Scene:
     def query_map(self, x, y, radius, layers):
         map_records = self.map.get_records_in_radius(x, y, radius, layers, mode='intersect')
         return map_records
+    
+    def last_action_label(self, i, actions):
+        last_actions = [a for a in actions if a['index'] <= i]
+        if not last_actions:
+            return 'none'
+        return last_actions[-1]['label']
+    
+    @staticmethod
+    def flatten_actions(actions):
+        flat_actions = [None] * actions[-1]['index']
+
+        for i in range(len(actions)-1):
+            this = actions[i]
+            next = actions[i+1]
+            idx1 = this['index']
+            idx2 = next['index']
+            flat_actions[idx1:idx2] = [this['label'] for j in range(idx2-idx1)]
+        
+        flat_actions.append('END')
+        return flat_actions
 
     '''
     METHODS======================================================================
@@ -254,7 +274,10 @@ class Scene:
         while i < len(self.data)-1:
             d = self.data[i]
             next = self.data[i+1]
-            if d['closest_lane'] != next['closest_lane']:
+            last_action = self.last_action_label(i, rich_actions)
+            #print(last_action)
+            if d['closest_lane'] != next['closest_lane'] and last_action != 'uturn':
+                #print('found cross point')
                 #found cross point, check that distances to each lane is less than width thresh
                 if d['dist_centerline'] > centerline_thresh and next['dist_centerline'] > centerline_thresh:
                     #propogate in each direction
@@ -278,11 +301,6 @@ class Scene:
                     right_posted = False
                     left_posted = False
                     for l in reversed(range(len(rich_actions)-1)): # consider length of range
-                        if rich_actions[l]['index'] <= j and not right_posted:
-                            right_posted = True
-                            right_action = {'label':rich_actions[l]['label'], 'index':j, 'time':self.data[j]['time']}
-                            rich_actions[l] = right_action
-                            continue
                         if rich_actions[l]['index'] <= k and not left_posted:
                             left_posted = True
                             left_action = {'label':'change lane %s' % direction, 'index':k, 'time':self.data[k]['time']}
@@ -290,6 +308,11 @@ class Scene:
                                 rich_actions[l] = left_action
                             else:
                                 rich_actions.insert(l+1, left_action)
+                            continue
+                        if rich_actions[l]['index'] <= j and not right_posted:
+                            right_posted = True
+                            right_action = {'label':rich_actions[l]['label'], 'index':j, 'time':self.data[j]['time']}
+                            rich_actions[l] = right_action
                             continue
                         if right_posted and not left_posted:
                             del rich_actions[l]
@@ -302,20 +325,42 @@ class Scene:
                     i = j-1
             i+=1
         
-        '''
         #overtakes
+        '''
         lane_changes = [i for i in rich_actions if i['label'] == 'change lane']
-        for i,action in enumerate(lane_changes-1): 
+        for i,action in enumerate(lane_changes[:len(lane_changes)-1]): 
             #check if the two lane changes are in opposite directions
             if action['label'] != lane_changes[i+1]['label']:
-                if 
+                print('OVERTAKE: ', action['label'], lane_changes[i+1])
+                action['label'] = "overtake"
+                del lane_changes[i+1]
         '''
+
+        i = 0
+        while i < len(rich_actions)-1:
+            #check if the two lane changes are in opposite directions
+            action = rich_actions[i]
+            next_action = rich_actions[i+1]
+            if 'change lane' in action['label'] and 'change lane' in next_action['label']:
+                if action['label'] != next_action['label']:
+                    print('OVERTAKE: ', action['label'], action['index'], next_action['label'], next_action['index'])
+                    action['label'] = "overtake"
+                    del rich_actions[i+1]
+                    i-=1
+            i+=1
 
                 
                 
 
         self.rich_actions = rich_actions
 
+    def output_data(self):
+        print('output_data')
+        out = []
+        flat_actions = self.flatten_actions(self.rich_actions)
+        for i,d in enumerate(self.data):
+            out.append((d['pos'][:2], d['anns'], flat_actions[i]))
+        return out
 
     def plot_actions(self, features=None, primitive=False):
 
