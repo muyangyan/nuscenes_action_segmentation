@@ -16,7 +16,8 @@ dataroot='/data/Datasets/nuscenes'
 
 colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine'} 
 
-nusc = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
+#nusc_mini = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
+#nusc_trainval = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
 nusc_map_so = NuScenesMap(dataroot=dataroot, map_name='singapore-onenorth')
 nusc_map_sh = NuScenesMap(dataroot=dataroot, map_name='singapore-hollandvillage')
 nusc_map_sq = NuScenesMap(dataroot=dataroot, map_name='singapore-queenstown')
@@ -26,7 +27,7 @@ nusc_can = NuScenesCanBus(dataroot=dataroot)
 
 class Scene:
 
-    def __init__(self, scene_name):
+    def __init__(self, nusc, scene_name):
         #settings
         scene = [ i for i in nusc.scene if scene_name in i['name'].lower() ][0]
         log_token = scene['log_token']
@@ -34,6 +35,7 @@ class Scene:
         map_location = log_record['location']
         maps = {'singapore-onenorth':nusc_map_so, 'singapore-hollandvillage':nusc_map_sh, 'singapore-queenstown':nusc_map_sq, 'boston-seaport':nusc_map_bs}
 
+        self.nusc = nusc
         self.scene_name = scene_name
         self.scene_token = scene['token']
         self.map = maps[map_location]
@@ -85,10 +87,10 @@ class Scene:
     should be called before extracting other data
     '''
     def extract_core_data(self):
-        scene = nusc.get('scene', self.scene_token)
+        scene = self.nusc.get('scene', self.scene_token)
         first_sample_token = scene['first_sample_token']
         
-        sample = nusc.get('sample', first_sample_token)
+        sample = self.nusc.get('sample', first_sample_token)
         self.data = []
 
         while True:
@@ -98,7 +100,7 @@ class Scene:
             next_token = sample['next']
             if next_token == '':
                 break
-            sample = nusc.get('sample', next_token)
+            sample = self.nusc.get('sample', next_token)
     
     '''
     given the utimes of the keyframes, get the closest matching CAN data from each channel and add it to the data
@@ -162,10 +164,10 @@ class Scene:
 
     def add_ann_data(self):
         for d in self.data:
-            sample = nusc.get('sample', d['token'])
+            sample = self.nusc.get('sample', d['token'])
             d['anns'] = []
             for ann_token in sample['anns']:
-                ann = nusc.get('sample_annotation', ann_token)
+                ann = self.nusc.get('sample_annotation', ann_token)
                 x = ann['translation'][0]
                 y = ann['translation'][1]
                 category = ann['category_name']
@@ -256,7 +258,7 @@ class Scene:
 
                             if valid:
                                 rich_actions[i]['label'] = 'uturn'
-                                print("UTURN:", self.scene_name)
+                                #print("UTURN:", self.scene_name)
                                 d_i = 0
                                 while rich_actions[i+1] != end:
                                     d_i+=1
@@ -286,7 +288,7 @@ class Scene:
                         j+=1
                     while k > 0 and self.data[k-1]['dist_centerline'] < self.data[k]['dist_centerline']:
                         k-=1
-                    print("LANE_CHANGE\n", "index: [", k, j, "]", "time: [", self.data[k]['time'], self.data[j]['time'], "]")
+                    #print("LANE_CHANGE\n", "index: [", k, j, "]", "time: [", self.data[k]['time'], self.data[j]['time'], "]")
 
                     start_direction = quaternion_yaw(Quaternion(self.data[k]['orientation']))
                     mid_direction = quaternion_yaw(Quaternion(self.data[(k+j)//2]['orientation']))
@@ -341,7 +343,7 @@ class Scene:
             next_action = rich_actions[i+1]
             if 'change lane' in action['label'] and 'change lane' in next_action['label']:
                 if action['label'] != next_action['label']:
-                    print('OVERTAKE: ', action['label'], action['index'], next_action['label'], next_action['index'])
+                    #print('OVERTAKE: ', action['label'], action['index'], next_action['label'], next_action['index'])
                     action['label'] = "overtake"
                     del rich_actions[i+1]
                     i-=1

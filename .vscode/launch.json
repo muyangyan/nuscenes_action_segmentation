@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "create_train_data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "create_train_data.py",
+            "console": "integratedTerminal",
+            "args": ""
+        },
+        {
             "name": "action seg",
             "type": "debugpy",
             "request": "launch",
