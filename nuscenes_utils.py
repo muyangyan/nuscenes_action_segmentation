@@ -16,7 +16,7 @@ dataroot='/data/Datasets/nuscenes'
 
 colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine'} 
 
-nusc = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
+nusc = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
 nusc_map_so = NuScenesMap(dataroot=dataroot, map_name='singapore-onenorth')
 nusc_map_sh = NuScenesMap(dataroot=dataroot, map_name='singapore-hollandvillage')
 nusc_map_sq = NuScenesMap(dataroot=dataroot, map_name='singapore-queenstown')
@@ -169,9 +169,7 @@ class Scene:
                 x = ann['translation'][0]
                 y = ann['translation'][1]
                 category = ann['category_name']
-                d['anns'].append({'category':category ,'pos':(x,y)})
-                #ax.scatter(x, y, color='m', marker='o', s=40)
-                #ax.annotate(category, (x, y))
+                d['anns'].append({'token':ann_token, 'category':category ,'pos':(x,y)})
 
     '''
     extracts all data we want from all nuscenes expansions
@@ -359,7 +357,7 @@ class Scene:
         out = []
         flat_actions = self.flatten_actions(self.rich_actions)
         for i,d in enumerate(self.data):
-            out.append((d['pos'][:2], d['anns'], flat_actions[i]))
+            out.append({ 'map':self.map, 'scene':self.scene_token, 'pos':d['pos'][:2], 'anns':d['anns'], 'action':flat_actions[i] })
         return out
 
     def plot_actions(self, features=None, primitive=False):
