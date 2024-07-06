@@ -14,7 +14,19 @@ from nuscenes.can_bus.can_bus_api import NuScenesCanBus
 
 dataroot='/data/Datasets/nuscenes'
 
-colors = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine'} 
+colors_map = dict(drivable_area='#a6cee3',
+                             road_segment='#1f78b4',
+                             road_block='#b2df8a',
+                             lane='#33a02c',
+                             ped_crossing='#fb9a99',
+                             walkway='#e31a1c',
+                             stop_line='#fdbf6f',
+                             carpark_area='#ff7f00',
+                             road_divider='#cab2d6',
+                             lane_divider='#6a3d9a',
+                             traffic_light='#7e772e')
+
+colors_actions = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine', 'END':'black'} 
 
 #nusc_mini = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
 #nusc_trainval = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
@@ -373,7 +385,7 @@ class Scene:
         for i in range(len(actions)-1):
             from_time = actions[i]['time']
             to_time = actions[i+1]['time']
-            color = colors[actions[i]['label']]
+            color = colors_actions[actions[i]['label']]
             periods.append((from_time, to_time, color))
         print(periods)
 
@@ -448,7 +460,7 @@ class Scene:
             y = d['pos'][1]
             patch = (x-radius, y-radius, x+radius, y+radius)
             fig, ax = self.map.render_map_patch(patch, layers, figsize=(6, 5))
-            ax.scatter(x, y, color=colors[action['label']], marker='o', s=40)
+            ax.scatter(x, y, color=colors_actions[action['label']], marker='o', s=40)
             ax.annotate(action['label'], (x, y))
 
             #render other objects
