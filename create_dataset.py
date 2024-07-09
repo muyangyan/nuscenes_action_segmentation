@@ -292,7 +292,7 @@ def main(args):
         bitmasks = torch.stack(bitmasks)
         scene_graphs = torch.stack(scene_graphs)
 
-        data = {'trajectory':traj, 'bitmasks':bitmasks, 'scene_graphs':scene_graphs, 'objects':objects, 'actions':actions}
+        data = {'cam_poses':traj, 'bitmasks':bitmasks, 'scene_graphs':scene_graphs, 'objects':objects, 'actions':actions}
 
         #write trajectory files
         name = str(traj_idx) #TODO: get a better naming scheme
