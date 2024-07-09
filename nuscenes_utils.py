@@ -28,6 +28,10 @@ colors_map = dict(drivable_area='#a6cee3',
 
 colors_actions = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine', 'END':'black'} 
 
+actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END']
+
+actions_map = {val:idx for idx, val in enumerate(actions)}
+
 #nusc_mini = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
 #nusc_trainval = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
 nusc_map_so = NuScenesMap(dataroot=dataroot, map_name='singapore-onenorth')
@@ -371,7 +375,7 @@ class Scene:
         out = []
         flat_actions = self.flatten_actions(self.rich_actions)
         for i,d in enumerate(self.data):
-            out.append({ 'map':self.map, 'scene':self.scene_token, 'pos':d['pos'][:2], 'anns':d['anns'], 'action':flat_actions[i] })
+            out.append({ 'map':self.map, 'scene':self.scene_token, 'pos':tuple(d['pos'][:2]), 'anns':d['anns'], 'action':flat_actions[i] })
         return out
 
     def plot_actions(self, features=None, primitive=False):
