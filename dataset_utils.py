@@ -1,5 +1,6 @@
 
 import pickle
+import json
 
 import torch
 import numpy as np
@@ -7,20 +8,26 @@ from torch.utils.data import Dataset, DataLoader
 
 import matplotlib.pyplot as plt
 import imageio
+import os
 
 from matplotlib.patches import Arrow
 from shapely.geometry import Polygon
 from descartes import PolygonPatch
 
-from nuscenes_utils import colors_map, colors_actions
+from nuscenes_utils import colors_map, colors_actions, actions, edge_labels, folders_exts
 from nuscenes_utils import nusc_map_so as nusc_map
 
 
 #visualization methods
 
+def select_frame(traj_data, i):
+    traj_data.pop('metadata', None)
+    return {key: seq[i] for key, seq in traj_data.items()}
+
 def render_trajectory(filename, traj_data, layers=nusc_map.non_geometric_layers, figsize=(10,10), alpha=0.5):
     frames = []
-    for frame_data in traj_data:
+    for i in range(len(traj_data['cam_poses'])):
+        frame_data = select_frame(traj_data, i)
         fig = render_frame(frame_data, layers, figsize=figsize, alpha=alpha)
 
         #add frame to gif
@@ -34,11 +41,17 @@ def render_trajectory(filename, traj_data, layers=nusc_map.non_geometric_layers,
 
 def render_frame(frame_data, layers=nusc_map.non_geometric_layers, figsize=(10,10), alpha=0.5):
 
-    pos = frame_data['pose'][:2]
-    angle = frame_data['pose'][2]
-    radius = frame_data['radius']
-    action = frame_data['action']
-    ego_pos = frame_data['ego_pos']
+    pos = frame_data['cam_poses'][:2]
+    angle = frame_data['cam_poses'][2]
+    radius = frame_data['cam_poses'][3]
+    action = int(frame_data['actions'])
+    objects = frame_data['objects']
+    map_objects = [val for val in objects.values() if val['type'] == 'map']
+    instance_objects = [val for val in objects.values() if val['type'] == 'instance']
+
+    #scene_graph = frame_data['scene_graphs']
+
+    #ego_pos = frame_data['ego_pos']
 
     #calculations==============
     outer_radius = radius * ( abs(np.sin(angle)) + abs(np.cos(angle)) )
@@ -60,7 +73,7 @@ def render_frame(frame_data, layers=nusc_map.non_geometric_layers, figsize=(10,1
     ax.add_patch(PolygonPatch(viewport_poly, fc='none'))
 
     #render map objects
-    for map_object in frame_data['map_objects']:
+    for map_object in map_objects:
         layer = map_object['layer']
         if layer not in layers:
             continue
@@ -86,17 +99,20 @@ def render_frame(frame_data, layers=nusc_map.non_geometric_layers, figsize=(10,1
                 ax.plot(xs, ys, color=colors_map[layer], alpha=alpha, label=None)
 
     #render instance objects
-    for instance_object in frame_data['instance_objects']:
+    for instance_object in instance_objects:
         x = instance_object['pos'][0]
         y = instance_object['pos'][1]
         category = instance_object['category']
-        ax.scatter(x, y, color='m', marker='o', s=40)
-        ax.annotate(category, (x, y))
 
-    #render ego vehicle and label with action
-    ax.scatter(ego_pos[0], ego_pos[1], color=colors_actions[action], marker='o', s=40, alpha=1)
-    ax.annotate(action, (ego_pos[0], ego_pos[1]))
+        if category == 'ego':
+            color = colors_actions[action]
+            label = actions[action]
+        else:
+            label = category
+            color='m'
 
+        ax.scatter(x, y, color=color, marker='o', s=40)
+        ax.annotate(label, (x, y))
 
     return fig
 
@@ -104,15 +120,58 @@ def render_frame(frame_data, layers=nusc_map.non_geometric_layers, figsize=(10,1
 # Pytorch interfaces
 
 class NuScenesCustom(Dataset):
-    def __init__(self, path):
-        self.path = path
-
-        with open(path, 'rb') as f:
-            self.data = pickle.load(f)
+    def __init__(self, root, traj_list, obs_perc=0.2, mode='test'):
+        self.root = root
+        self.mode = mode
+        self.traj_list = []
+        traj_list = traj_list
+        if self.mode == 'train' or self.mode == 'val':
+            for traj in traj_list:
+                self.traj_list.append([traj, .2])
+                #self.traj_list.append([traj, .3])
+                #self.traj_list.append([traj, .5])
+        elif self.mode == 'test' :
+            for traj in traj_list:
+                self.traj_list.append([traj, obs_perc])
 
     def __len__(self):
-        return len(self.data)
+        return len(self.traj_list)
 
     def __getitem__(self, idx):
-        #unflatten actions
-        return self.data[idx]
+        traj_file, obs_perc = self.traj_list[idx]
+        obs_perc = float(obs_perc)
+        item = self._make_input(traj_file, obs_perc)
+        return item
+
+    def _make_input(self, traj_file, obs_perc):
+
+        #TODO: use obs percentage, feature slicing
+        #TODO: write collate function
+
+        #keys are subfolders, values are extensions
+        item = {}
+
+        #read all files in
+        #for now just do actions, no past-future split, no transcript
+        for folder in folders_exts.keys():
+            folder_path = self.root + '/' + folder
+
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+            ext = folders_exts[folder]
+            file_path = folder_path + '/' + traj_file + ext
+
+            if ext == '.pt':
+                subdata = torch.load(file_path)
+            elif ext == '.pkl':
+                with open(file_path, 'rb') as file:
+                    subdata = pickle.load(file)
+            else:
+                with open(file_path, 'r') as file:
+                    subdata = json.load(file)
+
+            item.update({folder:subdata})
+        
+        return item
+
+    #def my_collate():

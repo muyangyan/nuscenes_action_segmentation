@@ -26,9 +26,14 @@ colors_map = dict(drivable_area='#a6cee3',
                              lane_divider='#6a3d9a',
                              traffic_light='#7e772e')
 
-colors_actions = {'stop':'red', 'back':'white', 'drive straight':'blue', 'accelerate':'green', 'decelerate':'yellow', 'turn left':'orange', 'turn right':'magenta', 'uturn':'c', 'change lane left':'Salmon', 'change lane right':'Salmon', 'overtake':'aquamarine', 'END':'black'} 
+colors_actions = ['red', 'white', 'blue', 'green', 'yellow', 'orange', 'magenta', 'c', 'Salmon', 'Salmon', 'aquamarine', 'black'] 
 
 actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END']
+
+edge_labels = ["on", "next to", "behind", "in front of",  "above", "across", "below", "inside", "under", "left" , "right", "in" , "None"] # borrowed from aryans code
+
+folders_exts = {'cam_poses':'.pt', 'bitmasks':'.pt', 'scene_graphs':'.pt', 'actions':'.pt', 'objects':'.pkl', 'metadata':'.json'}
+
 
 actions_map = {val:idx for idx, val in enumerate(actions)}
 
@@ -371,7 +376,6 @@ class Scene:
         self.rich_actions = rich_actions
 
     def output_data(self):
-        print('output_data')
         out = []
         flat_actions = self.flatten_actions(self.rich_actions)
         for i,d in enumerate(self.data):

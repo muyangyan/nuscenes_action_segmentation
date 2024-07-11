@@ -8,11 +8,13 @@ import pickle
 import argparse
 import random
 import os
+import json
 
 import warnings
 
 warnings.filterwarnings("ignore")
 
+custom_scene_blacklist = range(481, 518)
 
 
 #HELPERS===========================================================
@@ -28,10 +30,18 @@ def brownian_motion_2d_normalized(n_steps, dt=1.0, sigma=1, d=1):
     path *= d / max_distance
     return path
 
-def output_trajectory(datafolder, data, name):
+def output_trajectory(datafolder, data, metadata, name):
     if not os.path.exists(datafolder):
         os.makedirs(datafolder)
         print('Data folder not found, creating')
+
+    metapath = datafolder + '/metadata'
+    if not os.path.exists(metapath):
+        os.makedirs(metapath)
+        print('metadata folder not found, creating')
+    
+    with open(metapath + '/' + name + '.json', 'w') as file:
+        json.dump(metadata, file)
 
     non_torch_keys = ['objects']
 
@@ -40,6 +50,7 @@ def output_trajectory(datafolder, data, name):
         path = datafolder + '/' + key 
         if not os.path.exists(path):
             os.makedirs(path)
+            print('path %s not found, creating' % path)
         
         # how to name the files?
         # Scene number and then index?
@@ -50,16 +61,16 @@ def output_trajectory(datafolder, data, name):
                 pickle.dump(data[key], file)
         else:
             torch.save(data[key], path + '/' + name + '.pt')
+    
 
 '''
 create the scene table using nuscenes_utils
 '''
 def load_scene_data(nusc):
-    custom_blacklist = range(481, 518)
 
     scene_names = []
-    for i in range(80):
-        if i in nusc_can.can_blacklist or i in custom_blacklist:
+    for i in range(200):
+        if i in nusc_can.can_blacklist or i in custom_scene_blacklist:
             continue
         scene_name = 'scene-%s' % str(i).zfill(4)
         scene = [ i for i in nusc.scene if scene_name in i['name'].lower() ]
@@ -187,7 +198,7 @@ def get_visible_map_objects(pose, nusc_map, layers):
                     continue
                 visible_polygon = polygon.intersection(viewport_poly)
                 if visible_polygon.area > 0: #don't include records without any intersection
-                    obj = {'layer':layer, 'geoms':visible_polygon}
+                    obj = {'layer':layer, 'geom':visible_polygon}
                     map_objects.update({record_token:obj})
     for layer in line_layers:
         for record_token in map_records[layer]:
@@ -197,7 +208,7 @@ def get_visible_map_objects(pose, nusc_map, layers):
                 continue
             visible_line = line.intersection(viewport_poly)
             if visible_line.length > 0: #don't include records without any intersection
-                obj = {'layer':layer, 'geoms':visible_line}
+                obj = {'layer':layer, 'geom':visible_line}
                 map_objects.update({record_token:obj})
     
     return map_objects
@@ -227,7 +238,13 @@ def get_frame_data(args, pose, frame):
     bitmask = get_bitmask(pose, nusc_map, args.layers, args.bitmask_dim)
     map_objs = get_visible_map_objects(pose, nusc_map, args.layers)
 
-    objects = {'ego':{'category':'ego','pos':ego_pos}}
+    for key in instance_objs.keys():
+        instance_objs[key].update({'type':'instance'})
+
+    for key in map_objs.keys():
+        map_objs[key].update({'type':'map'})
+
+    objects = {'ego':{'type':'instance', 'category':'ego','pos':ego_pos}}
     objects.update(instance_objs) #combine all visible objects in this frame into one dictionary
     objects.update(map_objs) #combine all visible objects in this frame into one dictionary
 
@@ -239,8 +256,7 @@ def get_frame_data(args, pose, frame):
 def main(args):
 
     version = args.version
-    radius = args.radius
-    bitmask_dim = args.bitmask_dim
+    viewport_radius = args.viewport_radius
     datafolder = args.datafolder
     trajs_per_scene = args.trajs_per_scene
     noise_radius = args.noise_radius
@@ -253,7 +269,7 @@ def main(args):
     print('done')
 
     print('====creating trajectories=======')
-    trajectories, traj_scene_map = create_trajectories(scene_data, trajs_per_scene=trajs_per_scene, noise_radius=noise_radius)
+    trajectories, traj_scene_map = create_trajectories(scene_data, trajs_per_scene=trajs_per_scene, noise_radius=noise_radius, viewport_size=viewport_radius)
     print('done')
 
     #loop through all trajectories and generate final data
@@ -271,8 +287,8 @@ def main(args):
 
         #first pass collects object tokens
         for time_idx, pose in enumerate(traj):
-            this_scene = scene_data[scene_idx][time_idx]
-            frame_data = get_frame_data(args, pose, this_scene)
+            scene_frame = scene_data[scene_idx][time_idx]
+            frame_data = get_frame_data(args, pose, scene_frame)
 
             object_tokens = object_tokens.union(frame_data['objects'].keys()) # the keys are the object tokens
 
@@ -294,9 +310,11 @@ def main(args):
 
         data = {'cam_poses':traj, 'bitmasks':bitmasks, 'scene_graphs':scene_graphs, 'objects':objects, 'actions':actions}
 
+        metadata = {'scene_idx':scene_idx, 'object_tokens':object_tokens}
+
         #write trajectory files
         name = str(traj_idx) #TODO: get a better naming scheme
-        output_trajectory(datafolder, data, name)
+        output_trajectory(datafolder, data, metadata, name)
         print('written:', name)
 
     print('done')
@@ -306,7 +324,7 @@ parser.add_argument('-v', '--version', type=str, default='v1.0-mini')
 parser.add_argument('-f', '--datafolder', type=str, default='./data')
 parser.add_argument('-t', '--trajs_per_scene', type=float, default=3)
 parser.add_argument('-n', '--noise_radius', type=float, default=3)
-parser.add_argument('-r', '--radius', type=float, default=10)
+parser.add_argument('-r', '--viewport_radius', type=float, default=10)
 parser.add_argument('-d', '--bitmask_dim', type=tuple, default=(20,20))
 parser.add_argument('-l', '--layers', type=list, default=nusc_map_bs.non_geometric_layers)
 
