@@ -14,28 +14,8 @@ from nuscenes.can_bus.can_bus_api import NuScenesCanBus
 
 dataroot='/data/Datasets/nuscenes'
 
-colors_map = dict(drivable_area='#a6cee3',
-                             road_segment='#1f78b4',
-                             road_block='#b2df8a',
-                             lane='#33a02c',
-                             ped_crossing='#fb9a99',
-                             walkway='#e31a1c',
-                             stop_line='#fdbf6f',
-                             carpark_area='#ff7f00',
-                             road_divider='#cab2d6',
-                             lane_divider='#6a3d9a',
-                             traffic_light='#7e772e')
-
+#duplicate because it doesn't matter that visualization is consistent
 colors_actions = ['red', 'white', 'blue', 'green', 'yellow', 'orange', 'magenta', 'c', 'Salmon', 'Salmon', 'aquamarine', 'black'] 
-
-actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END']
-
-edge_labels = ["on", "next to", "behind", "in front of",  "above", "across", "below", "inside", "under", "left" , "right", "in" , "None"] # borrowed from aryans code
-
-folders_exts = {'cam_poses':'.pt', 'bitmasks':'.pt', 'scene_graphs':'.pt', 'actions':'.pt', 'objects':'.pkl', 'metadata':'.json'}
-
-
-actions_map = {val:idx for idx, val in enumerate(actions)}
 
 #nusc_mini = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
 #nusc_trainval = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
@@ -45,6 +25,9 @@ nusc_map_sq = NuScenesMap(dataroot=dataroot, map_name='singapore-queenstown')
 nusc_map_bs = NuScenesMap(dataroot=dataroot, map_name='boston-seaport')
 nusc_maps = [nusc_map_so, nusc_map_sh, nusc_map_sq, nusc_map_bs]
 nusc_can = NuScenesCanBus(dataroot=dataroot)
+
+non_geometric_layers = nusc_map_bs.non_geometric_layers
+non_geometric_polygon_layers = nusc_map_bs.non_geometric_polygon_layers
 
 class Scene:
 

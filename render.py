@@ -1,5 +1,5 @@
 from dataset_utils import *
-nusc_data = NuScenesCustom('./data', ['0','1','2'])
+nusc_data = NuScenesSimple('./data', ['0','1','2'])
 
 print('loaded, running')
 

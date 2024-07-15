@@ -12,10 +12,11 @@ import json
 
 import warnings
 
+from dataset_utils import actions, actions_dict
+
 warnings.filterwarnings("ignore")
 
 custom_scene_blacklist = range(481, 518)
-
 
 #HELPERS===========================================================
 
@@ -249,7 +250,7 @@ def get_frame_data(args, pose, frame):
     objects.update(map_objs) #combine all visible objects in this frame into one dictionary
 
     #convert action to index
-    action_idx = actions_map[action_key]
+    action_idx = actions_dict[action_key]
 
     return {'bitmask':bitmask, 'objects':objects, 'action':action_idx}
 

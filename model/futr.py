@@ -10,6 +10,8 @@ from einops import repeat, rearrange
 from model.extras.transformer import Transformer
 from model.extras.position import PositionalEncoding
 
+from model.extras.bitmask_embedder import BitmaskEmbedder
+
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
 class FUTR(nn.Module):
@@ -22,6 +24,8 @@ class FUTR(nn.Module):
         self.device = device
         self.hidden_dim = hidden_dim
         self.input_embed = nn.Linear(args.input_dim, hidden_dim)
+        self.bitmask_embed = BitmaskEmbedder(args.bitmask_channels, hidden_dim)
+
         self.transformer = Transformer(hidden_dim, n_head, num_encoder_layers, num_decoder_layers,
                                         hidden_dim*4, normalize_before=False)
         self.n_query = n_query
@@ -72,6 +76,12 @@ class FUTR(nn.Module):
         elif self.args.input_type == 'gt':
             B, S = src.size()
             src = self.gt_emb(src)
+        elif self.args.input_type == 'nusc_bitmasks':
+            B, S, C, H, W = src.size()
+            src = src.view(-1, C, H, W)
+            src = self.bitmask_embed(src) #[B*S, C, H, W] -> [B*S, F]
+            src = src.view(B, S, -1)
+
         src = F.relu(src)
 
         # action query embedding
