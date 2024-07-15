@@ -9,7 +9,7 @@ from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 #from data.basedataset import BaseDataset
 from model.futr import FUTR
 from train import train
-#from predict import predict
+from predict import predict
 
 from dataset_utils import *
 
@@ -48,7 +48,8 @@ def main():
     n_class = len(actions) + 1
     pad_idx = n_class + 1
 
-    traj_list = ['0', '1', '2', '3', '4', '5']
+    train_traj_list = ['0', '1', '2', '3', '4', '5']
+    test_traj_list = ['0', '1', '2', '3', '4', '5']
 
     # Model specification
     model = FUTR(n_class, args.hidden_dim, device=device, args=args, src_pad_idx=pad_idx,
@@ -73,22 +74,19 @@ def main():
 
 
     if args.predict :
-        obs_perc = [0.2, 0.3]
+        obs_perc = [0.2, 0.3, 0.5]
         results_save_path = results_save_path +'/runs'+ str(args.runs) +'.txt'
-        if args.dataset == 'breakfast' :
-            model_path = './ckpt/bf_split'+args.split+'.ckpt'
-        elif args.dataset == '50salads':
-            model_path = './ckpt/50s_split'+args.split+'.ckpt'
+        model_path = './ckpt/nusc_test'+'.ckpt'
         print("Predict with ", model_path)
 
         for obs_p in obs_perc :
             model.load_state_dict(torch.load(model_path))
             model.to(device)
-            #predict(model, video_test_list, args, obs_p, n_class, actions_dict, device)
+            predict(data_path, model, test_traj_list, obs_p, n_class, actions, actions_dict, device)
     else :
         # Training
         #trainset = BaseDataset(video_list, actions_dict, features_path, gt_path, pad_idx, n_class, n_query=args.n_query, args=args)
-        trainset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query, mode='train')
+        trainset = NuScenesDataset(data_path, train_traj_list, pad_idx, n_class, n_query=args.n_query, mode='train')
         train_loader = DataLoader(trainset, batch_size=args.batch_size, \
                                                     shuffle=True, num_workers=args.workers,
                                                     collate_fn=trainset.my_collate)

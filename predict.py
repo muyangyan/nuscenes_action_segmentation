@@ -8,38 +8,26 @@ from collections import defaultdict
 import numpy as np
 from utils import normalize_duration, eval_file
 
-def predict(model, vid_list, args, obs_p, n_class, actions_dict, device):
+def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, device):
     model.eval()
     with torch.no_grad():
-        data_path = '/data/Datasets/futr_data/'
-        if args.dataset == 'breakfast':
-            data_path = os.path.join(data_path, 'breakfast')
-        elif args.dataset == '50salads':
-            data_path = os.path.join(data_path, '50salads')
-        gt_path = os.path.join(data_path, 'groundTruth')
-        features_path = os.path.join(data_path, 'features')
-
+        
         eval_p = [0.1, 0.2, 0.3, 0.5]
         pred_p = 0.5
-        sample_rate = args.sample_rate
         NONE = n_class-1
         T_actions = np.zeros((len(eval_p), len(actions_dict)))
         F_actions = np.zeros((len(eval_p), len(actions_dict)))
         actions_dict_with_NONE = copy.deepcopy(actions_dict)
         actions_dict_with_NONE['NONE'] = NONE
 
-        for vid in vid_list:
-            file_name = vid.split('/')[-1].split('.')[0]
+        for i, traj_name in enumerate(traj_list):
+            features_path = data_path + '/bitmasks/'
+            actions_path = data_path + '/actions/'
+            features = torch.load(features_path + traj_name + '.pt')
+            gt_seq = torch.load(actions_path + traj_name + '.pt').int().tolist()
 
-            # load ground truth actions
-            gt_file = os.path.join(gt_path, file_name+'.txt')
-            gt_read = open(gt_file, 'r')
-            gt_seq = gt_read.read().split('\n')[:-1]
-            gt_read.close()
-
-            # load features
-            features_file = os.path.join(features_path, file_name+'.npy')
-            features = np.load(features_file).transpose()
+            #redundant but works for now
+            gt_seq = [actions[i] for i in gt_seq]
 
             vid_len = len(gt_seq)
             past_len = int(obs_p*vid_len)
@@ -47,10 +35,8 @@ def predict(model, vid_list, args, obs_p, n_class, actions_dict, device):
 
             past_seq = gt_seq[:past_len]
             features = features[:past_len]
-            inputs = features[::sample_rate, :]
-            inputs = torch.Tensor(inputs).to(device)
 
-            outputs = model(inputs=inputs.unsqueeze(0), mode='test')
+            outputs = model(features.unsqueeze(0), mode='test')
 
             output_action = outputs['action']
             output_dur = outputs['duration']
@@ -111,4 +97,5 @@ def predict(model, vid_list, args, obs_p, n_class, actions_dict, device):
             print(result)
         print('--------------------------------')
 
+            
         return

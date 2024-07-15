@@ -181,13 +181,10 @@ class NuScenesDataset(Dataset):
 
     def _make_input(self, traj_file, obs_perc):
 
-        #TODO: write collate function
-
         #keys are subfolders, values are extensions
         item = {}
 
         #read all files in
-        #for now just do actions, no past-future split, no transcript
         for folder in folders_exts.keys():
             folder_path = self.root + '/' + folder
 

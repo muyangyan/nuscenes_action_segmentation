@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main_nusc.py",
+            "console": "integratedTerminal",
+            "args": "--hidden_dim 512 --n_encoder_layer 2 --n_decoder_layer 2 --n_query 20 --seg --task long --pos_emb --anticipate --max_pos_len 3100 --sample_rate 6 --dataset nusc --predict --mode=train --split=1"
+        },
+        {
             "name": "train",
             "type": "debugpy",
             "request": "launch",
