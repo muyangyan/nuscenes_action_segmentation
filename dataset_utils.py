@@ -17,7 +17,7 @@ from descartes import PolygonPatch
 
 actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END']
 
-edge_labels = ["on", "next to", "behind", "in front of",  "above", "across", "below", "inside", "under", "left" , "right", "in" , "None"] # borrowed from aryans code
+edge_labels = ["close to", "far from", "in front of", "behind", "left of", "right of", "on", "adjacent to", "overlapping with"]
 
 #visualization
 colors_actions = ['red', 'white', 'blue', 'green', 'yellow', 'orange', 'magenta', 'c', 'Salmon', 'Salmon', 'aquamarine', 'black'] 

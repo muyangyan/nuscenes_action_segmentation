@@ -215,16 +215,24 @@ def get_visible_map_objects(pose, nusc_map, layers):
     return map_objects
 
 '''
-tokens_map maps is a list of object tokens
+object_dict maps object tokens to their index in the object_token list in the outer context
 objects is a dictionary containing the CURRENT objects in the frame and their CURRENT data
-output is a 3D torch tensor adjacency matrix
+output is a 2D torch tensor adjacency matrix (H,W) of integers denoting edge label
 '''
-def create_scene_graph(objects, token_map):
+def create_scene_graph(objects, object_dict):
 
-    n = len(token_map) #total
+    n = len(object_dict) #total
     m = len(objects) #visible
 
     adj_matrix = torch.zeros(n, n)
+
+    # TODO: don't consider pairs in a dense manner, select for just ego and such
+    for tok_i, src in objects.items():
+        for tok_j, dest in objects.items():
+            i = object_dict[tok_i]
+            j = object_dict[tok_j]
+            adj_matrix[i][j] = 1
+            #adj_matrix[i][j] = predict_edges(src, dest)
 
     return adj_matrix
 
@@ -298,11 +306,12 @@ def main(args):
             actions.append(frame_data['action'])
 
         object_tokens = [t for t in object_tokens] #assign indices to objects
+        object_dict = { v:i for i,v in enumerate(object_tokens) } #maps token to index in object_tokens
 
         #second pass create scene graphs
         for time_idx, frame_objs in enumerate(objects):
             #scene graph creation
-            scene_graphs.append(create_scene_graph(frame_objs, object_tokens))
+            scene_graphs.append(create_scene_graph(frame_objs, object_dict))
         
         traj = torch.Tensor(traj)
         actions = torch.Tensor(actions)
