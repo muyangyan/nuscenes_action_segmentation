@@ -17,7 +17,7 @@ from descartes import PolygonPatch
 
 actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END']
 
-edge_labels = ["close to", "far from", "in front of", "behind", "left of", "right of", "on", "adjacent to", "overlapping with"]
+edge_labels = ["NONE", "in front of", "behind", "left of", "right of", "on", "adjacent to", "intersects with"]
 
 #visualization
 colors_actions = ['red', 'white', 'blue', 'green', 'yellow', 'orange', 'magenta', 'c', 'Salmon', 'Salmon', 'aquamarine', 'black'] 
@@ -38,6 +38,7 @@ colors_map = dict(drivable_area='#a6cee3',
 folders_exts = {'cam_poses':'.pt', 'bitmasks':'.pt', 'scene_graphs':'.pt', 'actions':'.pt', 'objects':'.pkl', 'metadata':'.json'}
 
 actions_dict = {val:idx for idx, val in enumerate(actions)}
+edges_dict = {val:idx for idx, val in enumerate(edge_labels)}
 
 non_geometric_polygon_layers = ['drivable_area', 'road_segment', 'road_block', 'lane', 'ped_crossing',
                                              'walkway', 'stop_line', 'carpark_area']
@@ -223,21 +224,6 @@ class NuScenesDataset(Dataset):
         # add padding for future input seq
         trans_seq_len = len(trans_future_target)
         diff = self.n_query - trans_seq_len
-
-        '''
-        if diff > 0 :
-            tmp = np.ones(diff)*self.pad_idx
-            trans_future_target = np.concatenate((trans_future_target, tmp))
-            tmp_len = np.ones(diff+1)*self.pad_idx
-            trans_future_dur = np.concatenate((trans_future_dur, tmp_len))
-        elif diff < 0 :
-            trans_future_target = trans_future_target[:self.n_query]
-            trans_future_dur = trans_future_dur[:self.n_query]
-        else :
-            tmp_len = np.ones(1)*self.pad_idx
-            trans_future_dur = np.concatenate((trans_future_dur, tmp_len))
-        '''
-
 
         if diff > 0:
             tmp = torch.ones(diff) * self.pad_idx

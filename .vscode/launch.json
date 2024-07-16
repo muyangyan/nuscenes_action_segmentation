@@ -38,7 +38,7 @@
             "name": "create_dataset",
             "type": "debugpy",
             "request": "launch",
-            "program": "create_dataset.py",
+            "program": "dataset_generation/create_dataset.py",
             "console": "integratedTerminal",
             "args": ""
         },
