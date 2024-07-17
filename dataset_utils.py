@@ -127,8 +127,9 @@ def render_frame(frame_data, layers=non_geometric_layers, figsize=(10,10), alpha
 
     #render instance objects
     for instance_object in instance_objects:
-        x = instance_object['pos'][0]
-        y = instance_object['pos'][1]
+        x = instance_object['pose'][0]
+        y = instance_object['pose'][1]
+        yaw = instance_object['pose'][2]
         category = instance_object['category']
 
         if category == 'ego':
@@ -140,6 +141,8 @@ def render_frame(frame_data, layers=non_geometric_layers, figsize=(10,10), alpha
 
         ax.scatter(x, y, color=color, marker='o', s=40)
         ax.annotate(label, (x, y))
+        length = radius/10
+        ax.arrow(x, y, length*np.cos(yaw), length*np.sin(yaw), width=length*0.05, head_width=length*0.1, linewidth=0)
 
     return fig
 

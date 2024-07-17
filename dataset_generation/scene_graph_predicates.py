@@ -34,7 +34,7 @@ def intersects_with(src, dest):
 
 #instance -> map
 def on(src, dest):
-    position = Point(src['pos'])
+    position = Point(src['pose'][:2])
 
     if dest['layer'] == 'drivable_area':
         for geom in dest['geoms']:
@@ -48,32 +48,32 @@ def on(src, dest):
 def in_front_of(src, dest, radius):
     x, y = get_relative_pos(src['pose'], dest['pose'][:2])
     pos = np.array([x,y])
-    if np.linalg.norm(pos) > radius:
-        return y > 0 and abs(x) < y
+    if np.linalg.norm(pos) < radius:
+        return y < 0 and abs(x) < abs(y)
     return False
 
 #ego -> instance
 def behind(src, dest, radius):
     x, y = get_relative_pos(src['pose'], dest['pose'][:2])
     pos = np.array([x,y])
-    if np.linalg.norm(pos) > radius:
-        return y < 0 and abs(x) < abs(y)
+    if np.linalg.norm(pos) < radius:
+        return y > 0 and abs(x) < abs(y)
     return False
 
 #ego -> instance
 def right_of(src, dest, radius):
     x, y = get_relative_pos(src['pose'], dest['pose'][:2])
     pos = np.array([x,y])
-    if np.linalg.norm(pos) > radius:
-        return x > 0 and abs(y) < x
+    if np.linalg.norm(pos) < radius:
+        return x < 0 and abs(y) < abs(x)
     return False
 
 #ego -> instance
 def left_of(src, dest, radius):
     x, y = get_relative_pos(src['pose'], dest['pose'][:2])
     pos = np.array([x,y])
-    if np.linalg.norm(pos) > radius:
-        return x < 0 and abs(y) < abs(x)
+    if np.linalg.norm(pos) < radius:
+        return x > 0 and abs(y) < abs(x)
     return False
 
 
@@ -87,8 +87,9 @@ src right direction becomes x axis
 src_pose has yaw, dest_pos doesn't
 '''
 def get_relative_pos(src_pose, dest_pos):
-    pos = src_pose[:2]
+    pos = np.array(src_pose[:2])
     yaw = src_pose[2]
+    dest_pos = np.array(dest_pos)
 
     forward = np.array([np.cos(yaw), np.sin(yaw)])
     # Right vector (perpendicular to forward)

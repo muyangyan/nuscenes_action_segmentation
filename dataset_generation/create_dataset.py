@@ -237,10 +237,10 @@ def predict_edges(src, dest, map_buffer_radius, instance_dist_threshhold):
             return edges_dict['adjacent to']
 
     elif src['type'] == 'instance':
-        if dest['type'] == ['map']:
+        if dest['type'] == 'map':
             if on(src, dest):
                 return edges_dict['on']
-        elif dest['type'] == ['instance']:
+        elif dest['type'] == 'instance':
             if in_front_of(src, dest, instance_dist_threshhold):
                 return edges_dict['in front of']
             if behind(src, dest, instance_dist_threshhold):
@@ -267,7 +267,6 @@ def create_scene_graph(args, objects, object_dict):
     # TODO: don't consider pairs in a dense manner, select for just ego and such
     for tok_i, src in objects.items():
         if src['type'] == 'instance' and src['category'] != 'ego':
-            print('skip')
             continue
         for tok_j, dest in objects.items():
             i = object_dict[tok_i]
