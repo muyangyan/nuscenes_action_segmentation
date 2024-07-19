@@ -35,12 +35,20 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "create_dataset",
+            "name": "create_dataset_mini",
             "type": "debugpy",
             "request": "launch",
             "program": "dataset_generation/create_dataset.py",
             "console": "integratedTerminal",
-            "args": ""
+            "args": "--version v1.0-mini"
+        },
+        {
+            "name": "create_dataset_trainval",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "dataset_generation/create_dataset.py",
+            "console": "integratedTerminal",
+            "args": "--version v1.0-trainval --start_idx 362"
         },
         {
             "name": "action seg",

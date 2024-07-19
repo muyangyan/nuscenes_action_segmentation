@@ -15,7 +15,7 @@ from shapely.geometry import Polygon
 from descartes import PolygonPatch
 #doesn't import anything from dataset creation scripts, only uses custom dataset directy
 
-actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END']
+actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END', None]
 
 edge_labels = ["NONE", "in front of", "behind", "left of", "right of", "on", "adjacent to", "intersects with"]
 

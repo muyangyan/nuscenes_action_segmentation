@@ -15,6 +15,15 @@ def adjacent_to(src, dest, radius):
             if geom.intersects(single_geom_buffered):
                 return True
         return False
+    if len(uneven_pair) >= 2:
+        multi1, multi2 = uneven_pair[0]
+        for geom1 in multi1['geoms']:
+            for geom2 in multi2['geoms']:
+                geom1_buffered = geom1.buffer(radius/2)
+                geom2_buffered = geom2.buffer(radius/2)
+                if geom1_buffered.intersects(geom2_buffered):
+                    return True
+        return False
     
     src_geom_buffered = src['geom'].buffer(radius/2)
     dest_geom_buffered = dest['geom'].buffer(radius/2)
@@ -28,6 +37,13 @@ def intersects_with(src, dest):
         for geom in multi['geoms']:
             if geom.intersects(single['geom']):
                 return True
+        return False
+    if len(uneven_pair) >= 2:
+        multi1, multi2 = uneven_pair[0]
+        for geom1 in multi1['geoms']:
+            for geom2 in multi2['geoms']:
+                if geom1.intersects(geom2):
+                    return True
         return False
 
     return src['geom'].intersects(dest['geom'])

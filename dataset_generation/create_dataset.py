@@ -76,7 +76,7 @@ create the scene table using nuscenes_utils
 def load_scene_data(nusc):
 
     scene_names = []
-    for i in range(200):
+    for i in range(2000):
         if i in nusc_can.can_blacklist or i in custom_scene_blacklist:
             continue
         scene_name = 'scene-%s' % str(i).zfill(4)
@@ -310,12 +310,21 @@ def main(args):
     datafolder = args.datafolder
     trajs_per_scene = args.trajs_per_scene
     noise_radius = args.noise_radius
+    start_idx = args.start_idx
 
     nusc = NuScenes(version=version, dataroot=dataroot, verbose=True)
     args.nusc = nusc
 
     print('====loading scene data==========')
-    scene_data = load_scene_data(nusc)
+    scene_data_path = './dataset_generation/' + version + '.pkl'
+    if os.path.exists(scene_data_path):
+        with open(scene_data_path, 'rb') as f:
+            scene_data = pickle.load(f)
+    else:
+        scene_data = load_scene_data(nusc)
+        with open(scene_data_path, 'wb') as f:
+            pickle.dump(scene_data, f)
+            print('dumped pickle file')
     print('done')
 
     print('====creating trajectories=======')
@@ -325,7 +334,10 @@ def main(args):
     #loop through all trajectories and generate final data
     print('====getting and writing data====')
 
-    for traj_idx, traj in enumerate(trajectories):
+    trajectories = trajectories[start_idx:]
+
+    for idx, traj in enumerate(trajectories):
+        traj_idx = idx + start_idx
         scene_idx = traj_scene_map[traj_idx]
 
         bitmasks = []
@@ -374,10 +386,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--version', type=str, default='v1.0-mini')
 parser.add_argument('-f', '--datafolder', type=str, default='./data')
 parser.add_argument('-t', '--trajs_per_scene', type=float, default=3)
-parser.add_argument('-n', '--noise_radius', type=float, default=3)
+parser.add_argument('-n', '--noise_radius', type=float, default=2)
 parser.add_argument('-r', '--viewport_radius', type=float, default=10)
-parser.add_argument('-d', '--bitmask_dim', type=tuple, default=(20,20))
+parser.add_argument('-d', '--bitmask_dim', type=tuple, default=(32,32))
 parser.add_argument('-l', '--layers', type=list, default=nusc_map_bs.non_geometric_layers)
+
+parser.add_argument('--start_idx', type=int, default=0)
 
 #SG args
 parser.add_argument('--map_buffer_radius', type=float, default=1)
