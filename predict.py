@@ -22,8 +22,10 @@ def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, 
 
         for i, traj_name in enumerate(traj_list):
             features_path = data_path + '/bitmasks/'
+            scene_graphs_path = data_path + '/scene_graphs/'
             actions_path = data_path + '/actions/'
             features = torch.load(features_path + traj_name + '.pt')
+            scene_graphs = torch.load(scene_graphs_path + traj_name + '.pt')
             gt_seq = torch.load(actions_path + traj_name + '.pt').int().tolist()
 
             #redundant but works for now
@@ -35,8 +37,11 @@ def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, 
 
             past_seq = gt_seq[:past_len]
             features = features[:past_len]
+            scene_graphs = scene_graphs[:past_len]
 
-            outputs = model(features.unsqueeze(0), mode='test')
+            inputs = (features.unsqueeze(0), scene_graphs)
+
+            outputs = model(inputs, mode='test')
 
             output_action = outputs['action']
             output_dur = outputs['duration']

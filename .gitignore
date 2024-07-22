@@ -1,1 +1,3 @@
 /data/
+/dataset_generation/*.pkl
+

@@ -48,7 +48,7 @@ def main():
     n_class = len(actions) + 1
     pad_idx = n_class + 1
 
-    train_traj_list = ['0', '1', '2', '3', '4', '5']
+    train_traj_list = [str(i) for i in range(64)]
     test_traj_list = ['0', '1', '2', '3', '4', '5']
 
     # Model specification
@@ -56,6 +56,8 @@ def main():
                             n_query=args.n_query, n_head=args.n_head,
                             num_encoder_layers=args.n_encoder_layer, num_decoder_layers=args.n_decoder_layer).to(device)
 
+    #delim = '_'
+    #inputs_string = delim.join(args.input_types)
     model_save_path = os.path.join('./save_dir', args.dataset, args.task, 'model/transformer', split, args.input_type, \
                                     'runs'+str(args.runs))
     results_save_path = os.path.join('./save_dir/'+args.dataset+'/'+args.task+'/results/transformer', 'split'+split,
@@ -86,7 +88,7 @@ def main():
     else :
         # Training
         #trainset = BaseDataset(video_list, actions_dict, features_path, gt_path, pad_idx, n_class, n_query=args.n_query, args=args)
-        trainset = NuScenesDataset(data_path, train_traj_list, pad_idx, n_class, n_query=args.n_query, mode='train')
+        trainset = NuScenesDataset(data_path, train_traj_list, pad_idx, n_class, args.node_encoding_dim, n_query=args.n_query, mode='train')
         train_loader = DataLoader(trainset, batch_size=args.batch_size, \
                                                     shuffle=True, num_workers=args.workers,
                                                     collate_fn=trainset.my_collate)

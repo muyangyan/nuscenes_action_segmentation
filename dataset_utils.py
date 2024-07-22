@@ -6,12 +6,15 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
+from torch_geometric.data import Data, Batch
+from torch_geometric.utils import dense_to_sparse, remove_isolated_nodes, mask_select
+
 import matplotlib.pyplot as plt
 import imageio
 import os
 
 from matplotlib.patches import Arrow
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 from descartes import PolygonPatch
 #doesn't import anything from dataset creation scripts, only uses custom dataset directy
 
@@ -44,6 +47,12 @@ non_geometric_polygon_layers = ['drivable_area', 'road_segment', 'road_block', '
                                              'walkway', 'stop_line', 'carpark_area']
 non_geometric_line_layers = ['road_divider', 'lane_divider', 'traffic_light']
 non_geometric_layers = non_geometric_polygon_layers+non_geometric_line_layers
+
+categories = [['ego', 'animal', 'human', 'movable_object', 'static_object', 'vehicle'], 
+              ['pedestrian', 'barrier', 'debris', 'pushable_pullable', 'trafficcone', 'bicycle_rack', 'bicycle', 'bus', 'car', 'construction', 'emergency', 'motorcycle', 'trailer', 'truck'],
+              ['adult', 'child', 'construction_worker', 'personal_mobility', 'police_officer', 'stroller', 'wheelchair', 'bendy', 'rigid', 'ambulance', 'police']]
+
+
 
 #visualization methods
 
@@ -155,16 +164,16 @@ class NuScenesDataset(Dataset):
     #nclass?
     #nquery?
     #other args
-    def __init__(self, root, traj_list, pad_idx, n_class, n_query=8, obs_perc=0.2, mode='test'):
+    def __init__(self, root, traj_list, pad_idx, n_class, node_dim, n_query=8, obs_perc=0.2, mode='test'):
         self.root = root
         self.mode = mode
         self.traj_list = []
         self.n_class = n_class
+        self.node_dim = node_dim
         self.n_query = n_query
         self.pad_idx = pad_idx
         self.NONE = self.n_class - 1
 
-        traj_list = traj_list
         if self.mode == 'train' or self.mode == 'val':
             for traj in traj_list:
                 self.traj_list.append([traj, .2])
@@ -202,7 +211,7 @@ class NuScenesDataset(Dataset):
             elif ext == '.pkl':
                 with open(file_path, 'rb') as file:
                     subdata = pickle.load(file)
-            else:
+            elif ext == '.json':
                 with open(file_path, 'r') as file:
                     subdata = json.load(file)
 
@@ -214,9 +223,26 @@ class NuScenesDataset(Dataset):
 
         start_frame = 0
 
-        #just get bitmasks for now
         features = item['bitmasks'][start_frame : start_frame + observed_len]
+        sg_adj_matrices = item['scene_graphs'][start_frame : start_frame + observed_len]
         past_label = item['actions'][start_frame : start_frame + observed_len] #[S]
+        objects = item['objects'][start_frame : start_frame + observed_len]
+        metadata = item['metadata']
+        object_tokens = metadata['object_tokens']
+        #object_dict = { v:i for i,v in enumerate(object_tokens) } #maps token to index in object_tokens
+
+        # turn scene graphs into PyG data:
+        scene_graphs = []
+        for sg, objs in zip(sg_adj_matrices, objects):
+            node_features = self.encode_objects(objs, object_tokens, self.node_dim)
+
+            edge_index, edge_attr = dense_to_sparse(sg)
+            edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
+
+            node_features = mask_select(node_features, 0, mask)
+
+            data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
+            scene_graphs.append(data)
 
         future_content = \
         item['actions'][start_frame + observed_len : start_frame + observed_len + pred_len] #[T]
@@ -241,12 +267,67 @@ class NuScenesDataset(Dataset):
             trans_future_dur = torch.cat((trans_future_dur, tmp_len))
 
         tmp_item = {'features' : features,
-                    'past_label': past_label,
-                    'trans_future_dur':trans_future_dur,
+                    'scene_graphs' : scene_graphs,
+                    'past_label' : past_label,
+                    'trans_future_dur' : trans_future_dur,
                     'trans_future_target' : trans_future_target,
                     }
  
         return tmp_item
+
+    def encode_object(self, object, dim):
+        #fixed_dim = 5 + len(non_geometric_layers) + sum(len(categories[i]) for i in len(categories))
+        #poly_dim = dim - fixed_dim
+
+        type = torch.zeros(2)
+        layer = torch.zeros(len(non_geometric_layers))
+        polygon = torch.zeros(3) #centroid x, centroid y, area
+        category = [torch.zeros(len(c)) for c in categories]
+        pose = torch.zeros(3)
+        if object['type'] == 'map':
+            type[0] = 1
+
+            layer_index = non_geometric_layers.index(object['layer'])
+            layer[layer_index] = 1
+
+            if object['layer'] == 'drivable_area':
+                geom = object['geoms'][0]
+                #possible edge case: geoms is a list of many Polygons, must be made into MultiPolygon
+            else:
+                geom = object['geom']
+            polygon[0] = geom.centroid.x
+            polygon[1] = geom.centroid.y
+            polygon[2] = geom.area
+
+        else:
+            type[1] = 1
+            category_string = object['category']
+            substrings = category_string.split('.')
+            for i,s in enumerate(substrings):
+                
+                index = categories[i].index(s)
+                category[i][index] = 1
+            pose = torch.Tensor(object['pose'])
+
+        embedding = torch.cat((type, layer, polygon, category[0], category[1], category[2], pose))
+
+        assert len(embedding) == dim
+
+        return embedding
+
+
+    def encode_objects(self, objs, object_tokens, dim):
+        embedded_objects = torch.zeros((len(object_tokens), dim))
+        for i, token in enumerate(object_tokens):
+            if token not in objs.keys():
+                continue
+
+            object = objs[token]
+
+            embedded_objects[i] = self.encode_object(object, dim)
+        
+        return embedded_objects
+        
 
     def my_collate(self, batch):
         '''custom collate function, gets inputs as a batch, output : batch'''
@@ -255,6 +336,8 @@ class NuScenesDataset(Dataset):
         b_past_label = [item['past_label'] for item in batch]
         b_trans_future_dur = [item['trans_future_dur'] for item in batch]
         b_trans_future_target = [item['trans_future_target'] for item in batch]
+
+        b_scene_graphs = [item['scene_graphs'] for item in batch]
 
         batch_size = len(batch)
 
@@ -265,7 +348,19 @@ class NuScenesDataset(Dataset):
                                                         padding_value=self.pad_idx)
         b_trans_future_target = torch.nn.utils.rnn.pad_sequence(b_trans_future_target, batch_first=True, padding_value=self.pad_idx)
 
-        batch = [b_features, b_past_label, b_trans_future_dur, b_trans_future_target]
+        #batch scene graphs by timestep
+        max_time = max(len(series) for series in b_scene_graphs)
+        batched_data = []
+        for t in range(max_time):
+            graphs_at_t = [series[t] if t < len(series) else None for series in b_scene_graphs]
+            graphs_at_t = [g for g in graphs_at_t if g is not None]
+            if graphs_at_t:
+                batched_data.append(Batch.from_data_list(graphs_at_t))
+            else:
+                batched_data.append(None)
+        b_scene_graphs = batched_data
+
+        batch = [b_features, b_scene_graphs, b_past_label, b_trans_future_dur, b_trans_future_target]
 
         return batch
 
@@ -317,10 +412,6 @@ class NuScenesSimple(Dataset):
         return item
 
     def _make_input(self, traj_file, obs_perc):
-
-        #TODO: use obs percentage, feature slicing
-
-        #TODO: write collate function
 
         #keys are subfolders, values are extensions
         item = {}

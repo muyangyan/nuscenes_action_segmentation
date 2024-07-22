@@ -10,7 +10,8 @@ from einops import repeat, rearrange
 from model.extras.transformer import Transformer
 from model.extras.position import PositionalEncoding
 
-from model.extras.bitmask_embedder import BitmaskEmbedder
+from model.extras.bitmask_embedder import BitmaskEmbedding
+from model.extras.scene_graph_embedder import SceneGraphEmbedding
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
@@ -24,7 +25,16 @@ class FUTR(nn.Module):
         self.device = device
         self.hidden_dim = hidden_dim
         self.input_embed = nn.Linear(args.input_dim, hidden_dim)
-        self.bitmask_embed = BitmaskEmbedder(args.bitmask_channels, hidden_dim)
+
+        if args.input_type == 'nusc_bitmasks_scenegraphs':
+            mask_out_dim = hidden_dim//2
+            sg_out_dim = hidden_dim//2
+        else:
+            mask_out_dim = hidden_dim
+            sg_out_dim = hidden_dim
+
+        self.bitmask_embed = BitmaskEmbedding(args.bitmask_channels, mask_out_dim)
+        self.scene_graph_embed = SceneGraphEmbedding(args.node_encoding_dim, 32, sg_out_dim) #[T, B, Data]
 
         self.transformer = Transformer(hidden_dim, n_head, num_encoder_layers, num_decoder_layers,
                                         hidden_dim*4, normalize_before=False)
@@ -58,12 +68,12 @@ class FUTR(nn.Module):
 
     def forward(self, inputs, mode='train'):
         if mode == 'train' :
-            src, src_label = inputs
+            src, scene_graphs, src_label = inputs
             tgt_key_padding_mask = None
             src_key_padding_mask = get_pad_mask(src_label, self.src_pad_idx).to(self.device)
             memory_key_padding_mask = src_key_padding_mask.clone().to(self.device)
         else :
-            src = inputs
+            src, scene_graphs = inputs
             src_key_padding_mask = None
             memory_key_padding_mask = None
             tgt_key_padding_mask = None
@@ -76,11 +86,26 @@ class FUTR(nn.Module):
         elif self.args.input_type == 'gt':
             B, S = src.size()
             src = self.gt_emb(src)
-        elif self.args.input_type == 'nusc_bitmasks':
+        elif self.args.input_type in ['nusc_bitmasks', 'nusc_bitmasks_scenegraphs']:
             B, S, C, H, W = src.size()
             src = src.view(-1, C, H, W)
             src = self.bitmask_embed(src) #[B*S, C, H, W] -> [B*S, F]
             src = src.view(B, S, -1)
+
+            if scene_graphs != None:
+                embeddings_list = []
+                for time_step in scene_graphs:
+                    # time_step is a Batch object
+                    batch_embeddings = self.scene_graph_embed(time_step.x, time_step.edge_index, time_step.batch)
+                    trajs, feature_dim = batch_embeddings.size()
+                    padding = torch.zeros((self.args.batch_size - trajs, feature_dim))
+                    batch_embeddings = torch.cat((batch_embeddings, padding), 0)
+                    embeddings_list.append(batch_embeddings)
+
+                sg_src = torch.stack(embeddings_list)
+                sg_src = rearrange(sg_src, 't b c -> b t c')
+                src = torch.cat((src, sg_src), 2) #concat with src along F
+
 
         src = F.relu(src)
 

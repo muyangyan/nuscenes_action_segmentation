@@ -5,9 +5,9 @@ import torchvision.models as models
 import torch
 import torch.nn as nn
 
-class BitmaskEmbedder(nn.Module):
+class BitmaskEmbedding(nn.Module):
     def __init__(self, in_channels=10, output_dim=256):
-        super(BitmaskEmbedder, self).__init__()
+        super(BitmaskEmbedding, self).__init__()
         self.features = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),

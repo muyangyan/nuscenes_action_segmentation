@@ -24,8 +24,9 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
         for i, data in enumerate(train_loader):
             print('batch start %d' % i)
             optimizer.zero_grad()
-            features, past_label, trans_dur_future, trans_future_target = data
+            features, scene_graphs, past_label, trans_dur_future, trans_future_target = data
             features = features.to(device) #[B, S, C]
+            scene_graphs = [sg.to(device) for sg in scene_graphs] #[T,B,F] a list of PyG Batches (1 per timestep)
             past_label = past_label.to(device) #[B, S]
             trans_dur_future = trans_dur_future.to(device)
             trans_future_target = trans_future_target.to(device)
@@ -34,18 +35,21 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
             B = trans_dur_future.size(0)
             target_dur = trans_dur_future*trans_dur_future_mask
             target = trans_future_target
-            if args.input_type == 'i3d_transcript' or args.input_type == 'nusc_bitmasks':
-                inputs = (features, past_label)
+            if args.input_type in ['i3d_transcript', 'nusc_bitmasks']:
+                inputs = (features, None, past_label)
+            elif args.input_type == 'nusc_bitmasks_scenegraphs':
+                inputs = (features, scene_graphs, past_label)
             elif args.input_type == 'gt':
                 gt_features = past_label.int()
-                inputs = (gt_features, past_label)
+                inputs = (gt_features, None, past_label)
 
             outputs = model(inputs)
+
             losses = 0
             if args.seg :
                 output_seg = outputs['seg']
                 B, T, C = output_seg.size()
-                print('seg dims:', B, T, C)
+                #print('seg dims:', B, T, C)
                 output_seg = output_seg.view(-1, C).to(device)
                 target_past_label = past_label.view(-1)
                 loss_seg, n_seg_correct, n_seg_total = cal_performance(output_seg, target_past_label, pad_idx)
@@ -56,7 +60,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
             if args.anticipate :
                 output = outputs['action']
                 B, T, C = output.size()
-                print('antic dims:', B, T, C)
+                #print('antic dims:', B, T, C)
                 output = output.view(-1, C).to(device)
                 target = target.contiguous().view(-1)
                 out = output.max(1)[1] #oneshot

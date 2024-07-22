@@ -56,3 +56,6 @@ parser.add_argument("--runs", default=0, help="save runs")
 #nusc args
 #TODO: make layers selectable
 parser.add_argument("--bitmask_channels", default=10)
+
+#scene graph node embedding size
+parser.add_argument("--node_encoding_dim", default=50)
