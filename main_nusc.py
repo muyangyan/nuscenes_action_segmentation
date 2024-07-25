@@ -24,6 +24,7 @@ device = torch.device('cuda')
 #torch.cuda.manual_seed_all(seed)
 #cudnn.benchmark, cudnn.deterministic = False, True
 
+data_path = '/data/Datasets/nuscenes_custom/data'
 
 def main():
     args = parser.parse_args()
@@ -32,8 +33,8 @@ def main():
         device = torch.device('cpu')
         print('using cpu')
     else:
-        device = torch.device('cpu')
-        print('using cpu')
+        device = torch.device('cuda')
+        print('using gpu')
     print('runs : ', args.runs)
     print('model type : ', args.model)
     print('input type : ', args.input_type)
@@ -43,13 +44,14 @@ def main():
 
     split = args.split
 
-    data_path = './data'
 
     n_class = len(actions) + 1
     pad_idx = n_class + 1
 
-    train_traj_list = [str(i) for i in range(64)]
-    test_traj_list = ['0', '1', '2', '3', '4', '5']
+    with open('splits.json', 'r') as f:
+        splits = json.load(f)
+        train_traj_list = [str(i) for i in splits[str(split)]['train']]
+        test_traj_list = [str(i) for i in splits[str(split)]['test']]
 
     # Model specification
     model = FUTR(n_class, args.hidden_dim, device=device, args=args, src_pad_idx=pad_idx,
@@ -67,7 +69,8 @@ def main():
 
 
     model_save_file = os.path.join(model_save_path, 'checkpoint.ckpt')
-    model = nn.DataParallel(model).to(device)
+    #model = nn.DataParallel(model).to(device)
+    model = model.to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=args.weight_decay)
     warmup_epochs = args.warmup_epochs

@@ -16,6 +16,7 @@ import os
 from matplotlib.patches import Arrow
 from shapely.geometry import Polygon, MultiPolygon
 from descartes import PolygonPatch
+import networkx as nx
 #doesn't import anything from dataset creation scripts, only uses custom dataset directy
 
 actions = ['stop', 'back', 'drive straight', 'accelerate', 'decelerate', 'turn left', 'turn right', 'uturn', 'change lane left', 'change lane right', 'overtake', 'END', None]
@@ -153,6 +154,77 @@ def render_frame(frame_data, layers=non_geometric_layers, figsize=(10,10), alpha
         length = radius/10
         ax.arrow(x, y, length*np.cos(yaw), length*np.sin(yaw), width=length*0.05, head_width=length*0.1, linewidth=0)
 
+    return fig
+
+def get_label(node, object_list, objects):
+    object = objects[ object_list[node] ]
+    if object['type'] == 'map':
+        return str(object['layer'])
+    if object['type'] == 'instance':
+        return str(object['category'])
+
+def get_color(node, object_list, objects):
+    object = objects[ object_list[node] ]
+    if object['type'] == 'map':
+        return 'blue'
+    if object['type'] == 'instance':
+        return 'red'
+
+def get_layer(node, object_list, objects):
+    object = objects[ object_list[node] ]
+    if object['type'] == 'map':
+        return object['layer']
+    else:
+        return None
+
+
+def visualize_graph(adjacency_matrix, object_list, objects, layout, excluded_layers=None, k=3, iterations=50):
+    # Convert PyTorch tensor to numpy array
+    adj_matrix = adjacency_matrix.cpu().numpy()
+
+    # Create a graph from the adjacency matrix
+    G = nx.from_numpy_array(adj_matrix, create_using=nx.DiGraph)
+
+    # Remove isolated nodes (nodes with no connections)
+    G.remove_nodes_from(list(nx.isolates(G)))
+
+    G.remove_nodes_from([node for node in G.nodes if get_layer(node, object_list, objects) in excluded_layers])
+
+    # If the graph is empty after removing isolated nodes, return
+    if len(G) == 0:
+        print("No connected nodes to display.")
+        return
+
+    # Set up the plot
+    fig = plt.figure(figsize=(10, 10))
+    
+    # Generate a layout for the nodes
+    if layout == 'spring':
+        pos = nx.spring_layout(G, k=k, iterations=iterations)
+    elif layout == 'kk':
+        pos = nx.kamada_kawai_layout(G)
+    elif layout == 'fr':
+        pos = nx.fruchterman_reingold_layout(G)
+    
+    # Draw the nodes
+    node_colors = [get_color(node, object_list, objects) for node in G.nodes()]
+    nx.draw_networkx_nodes(G, pos, node_size=3000, node_color=node_colors)
+    
+    # Draw the edges
+    nx.draw_networkx_edges(G, pos, arrows=True, width=7)
+    
+    # Add labels to the nodes
+    labels = {node: get_label(node, object_list, objects) for node in G.nodes()}
+    #nx.draw_networkx_labels(G, pos, labels, font_size=16)
+
+    edge_labels_graph = {(u, v): edge_labels[ adj_matrix[u][v] ] for u, v in G.edges()}
+    #edge_labels = {(u, v): adj_matrix[u][v] for u, v in G.edges()}
+    #nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_graph, font_size=16)
+
+    
+    # Show the plot
+    plt.axis('off')
+    plt.tight_layout()
     return fig
 
 

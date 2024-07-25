@@ -11,6 +11,9 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
     model.to(device)
     model.train()
     print("Training Start")
+
+    log_file = open('log.txt', 'w')
+
     for epoch in range(args.epochs):
         epoch_acc =0
         epoch_loss = 0
@@ -21,6 +24,8 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
         total_class_correct = 0
         total_seg = 0
         total_seg_correct = 0
+
+        batch_loss_buffer = []
         for i, data in enumerate(train_loader):
             print('batch start %d' % i)
             optimizer.zero_grad()
@@ -82,11 +87,15 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
                 losses += loss_dur
                 epoch_loss_dur += loss_dur.item()
 
-
-            epoch_loss += losses.item()
+            batch_loss = losses.item()
+            epoch_loss += batch_loss
             losses.backward()
             optimizer.step()
 
+            batch_loss_buffer.append("%.6f\n" % batch_loss)
+
+        log_file.writelines(batch_loss_buffer)
+        log_file.flush()
 
         epoch_loss = epoch_loss / (i+1)
         print("Epoch [", (epoch+1), '/', args.epochs, '] Loss : %.3f'%epoch_loss)
