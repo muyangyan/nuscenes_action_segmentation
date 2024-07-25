@@ -11,7 +11,6 @@ import torch
 import pickle
 import argparse
 import random
-import os
 import json
 
 import warnings
@@ -311,6 +310,8 @@ def main(args):
     trajs_per_scene = args.trajs_per_scene
     noise_radius = args.noise_radius
     start_idx = args.start_idx
+    end_idx = args.end_idx
+    overwrite = args.overwrite
 
     nusc = NuScenes(version=version, dataroot=dataroot, verbose=True)
     args.nusc = nusc
@@ -334,10 +335,19 @@ def main(args):
     #loop through all trajectories and generate final data
     print('====getting and writing data====')
 
-    trajectories = trajectories[start_idx:]
+    if not end_idx:
+        end_idx = len(trajectories)
+
+    trajectories = trajectories[start_idx:end_idx]
 
     for idx, traj in enumerate(trajectories):
         traj_idx = idx + start_idx
+
+        if overwrite == False:
+            if os.path.exists(datafolder + '/' + 'actions' + '/' + str(traj_idx) + '.pt'):
+                continue
+
+
         scene_idx = traj_scene_map[traj_idx]
 
         bitmasks = []
@@ -376,7 +386,7 @@ def main(args):
         metadata = {'scene_idx':scene_idx, 'object_tokens':object_tokens}
 
         #write trajectory files
-        name = str(traj_idx) #TODO: get a better naming scheme
+        name = str(traj_idx)
         output_trajectory(datafolder, data, metadata, name)
         print('written:', name)
 
@@ -384,7 +394,7 @@ def main(args):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--version', type=str, default='v1.0-mini')
-parser.add_argument('-f', '--datafolder', type=str, default='./data')
+parser.add_argument('-f', '--datafolder', type=str, default='/data/Datasets/nuscenes_custom/data')
 parser.add_argument('-t', '--trajs_per_scene', type=float, default=3)
 parser.add_argument('-n', '--noise_radius', type=float, default=2)
 parser.add_argument('-r', '--viewport_radius', type=float, default=10)
@@ -392,6 +402,9 @@ parser.add_argument('-d', '--bitmask_dim', type=tuple, default=(32,32))
 parser.add_argument('-l', '--layers', type=list, default=nusc_map_bs.non_geometric_layers)
 
 parser.add_argument('--start_idx', type=int, default=0)
+parser.add_argument('--end_idx', type=int, default=None)
+
+parser.add_argument('--overwrite', type=bool, default=False)
 
 #SG args
 parser.add_argument('--map_buffer_radius', type=float, default=1)

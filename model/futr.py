@@ -91,14 +91,14 @@ class FUTR(nn.Module):
             src = src.view(-1, C, H, W)
             src = self.bitmask_embed(src) #[B*S, C, H, W] -> [B*S, F]
             src = src.view(B, S, -1)
-
+        
             if scene_graphs != None:
                 embeddings_list = []
                 for time_step in scene_graphs:
                     # time_step is a Batch object
                     batch_embeddings = self.scene_graph_embed(time_step.x, time_step.edge_index, time_step.batch)
                     trajs, feature_dim = batch_embeddings.size()
-                    padding = torch.zeros((self.args.batch_size - trajs, feature_dim))
+                    padding = torch.zeros((B - trajs, feature_dim)).to(self.device)
                     batch_embeddings = torch.cat((batch_embeddings, padding), 0)
                     embeddings_list.append(batch_embeddings)
 
