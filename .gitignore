@@ -1,3 +1,2 @@
-/data/
 /dataset_generation/*.pkl
-
+/save_dir/
