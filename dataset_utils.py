@@ -236,7 +236,7 @@ class NuScenesDataset(Dataset):
     #nclass?
     #nquery?
     #other args
-    def __init__(self, root, traj_list, pad_idx, n_class, node_dim, n_query=8, obs_perc=0.2, mode='test'):
+    def __init__(self, root, traj_list, pad_idx, n_class, node_dim, n_query=8, obs_p=0.2, mode='test'):
         self.root = root
         self.mode = mode
         self.traj_list = []
@@ -244,6 +244,7 @@ class NuScenesDataset(Dataset):
         self.node_dim = node_dim
         self.n_query = n_query
         self.pad_idx = pad_idx
+        self.obs_p = obs_p
         self.NONE = self.n_class - 1
 
         if self.mode == 'train' or self.mode == 'val':
@@ -253,7 +254,7 @@ class NuScenesDataset(Dataset):
                 self.traj_list.append([traj, .5])
         elif self.mode == 'test' :
             for traj in traj_list:
-                self.traj_list.append([traj, obs_perc])
+                self.traj_list.append([traj, obs_p])
 
     def __len__(self):
         return len(self.traj_list)
@@ -316,6 +317,7 @@ class NuScenesDataset(Dataset):
             data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
             scene_graphs.append(data)
 
+
         future_content = \
         item['actions'][start_frame + observed_len : start_frame + observed_len + pred_len] #[T]
         trans_future, trans_future_dur = self.seq2transcript(future_content.int())
@@ -338,14 +340,16 @@ class NuScenesDataset(Dataset):
             tmp_len = torch.ones(1) * self.pad_idx
             trans_future_dur = torch.cat((trans_future_dur, tmp_len))
 
-        tmp_item = {'features' : features,
-                    'scene_graphs' : scene_graphs,
-                    'past_label' : past_label,
-                    'trans_future_dur' : trans_future_dur,
-                    'trans_future_target' : trans_future_target,
-                    }
+        final_item = {'features' : features,
+                        'scene_graphs' : scene_graphs,
+                        'past_label' : past_label,
+                        'trans_future_dur' : trans_future_dur,
+                        'trans_future_target' : trans_future_target,
+                        }
+        if self.mode == 'test':
+            final_item.update({'actions' : item['actions']})
  
-        return tmp_item
+        return final_item
 
     def encode_object(self, object, dim):
         #fixed_dim = 5 + len(non_geometric_layers) + sum(len(categories[i]) for i in len(categories))

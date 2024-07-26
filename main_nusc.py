@@ -12,6 +12,7 @@ from train import train
 from predict import predict
 
 from dataset_utils import *
+import mlflow
 
 device = torch.device('cuda')
 
@@ -60,15 +61,14 @@ def main():
 
     #delim = '_'
     #inputs_string = delim.join(args.input_types)
-    model_save_path = os.path.join('./save_dir', args.dataset, args.task, 'model/transformer', split, args.input_type, \
+    model_save_path = os.path.join('./save_dir', args.dataset, args.task, 'model/transformer', 'split'+split, args.input_type, \
                                     'runs'+str(args.runs))
-    results_save_path = os.path.join('./save_dir/'+args.dataset+'/'+args.task+'/results/transformer', 'split'+split,
+    results_save_path = os.path.join('./save_dir', args.dataset, args.task, 'results/transformer', 'split'+split,
                                     args.input_type )
     if not os.path.exists(results_save_path):
         os.makedirs(results_save_path)
 
 
-    model_save_file = os.path.join(model_save_path, 'checkpoint.ckpt')
     #model = nn.DataParallel(model).to(device)
     model = model.to(device)
 
@@ -81,13 +81,15 @@ def main():
     if args.predict :
         obs_perc = [0.2, 0.3, 0.5]
         results_save_path = results_save_path +'/runs'+ str(args.runs) +'.txt'
-        model_path = './ckpt/nusc_test'+'.ckpt'
+        model_path = os.path.join(model_save_path, 'checkpoint%d.ckpt' % args.checkpoint)
         print("Predict with ", model_path)
 
         for obs_p in obs_perc :
             model.load_state_dict(torch.load(model_path))
             model.to(device)
-            predict(data_path, model, test_traj_list, obs_p, n_class, actions, actions_dict, device)
+            testset = NuScenesDataset(data_path, test_traj_list, pad_idx, n_class, args.node_encoding_dim, n_query=args.n_query, obs_p=obs_p, mode='test')
+            #predict(data_path, model, test_traj_list, obs_p, n_class, actions, actions_dict, device)
+            predict(args, testset, model, device)
     else :
         # Training
         #trainset = BaseDataset(video_list, actions_dict, features_path, gt_path, pad_idx, n_class, n_query=args.n_query, args=args)

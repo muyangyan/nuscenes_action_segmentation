@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "predict_nusc_bm_sg",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": false,
+            "program": "main_nusc.py",
+            "console": "integratedTerminal",
+            "args": "--hidden_dim 512 --n_encoder_layer 2 --n_decoder_layer 2 --n_query 20 --seg --task long --pos_emb --input_type=nusc_bitmasks_scenegraphs --anticipate --max_pos_len 3100 --sample_rate 6 --predict --mode=train --split=1 --checkpoint 22"
+        },
+        {
             "name": "test",
             "type": "debugpy",
             "request": "launch",

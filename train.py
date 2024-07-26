@@ -115,7 +115,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
         scheduler.step()
 
         save_path = os.path.join(model_save_path)
-        if epoch >= 30 :
+        if epoch >= 0 :
             save_file = os.path.join(save_path, 'checkpoint'+str(epoch)+'.ckpt')
             torch.save(model.state_dict(), save_file)
         if not os.path.exists(save_path):

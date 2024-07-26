@@ -59,3 +59,6 @@ parser.add_argument("--bitmask_channels", default=10)
 
 #scene graph node embedding size
 parser.add_argument("--node_encoding_dim", default=50)
+
+#test checkpoint number
+parser.add_argument("--checkpoint", type=int, default=0)

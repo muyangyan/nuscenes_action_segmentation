@@ -7,26 +7,35 @@ import copy
 from collections import defaultdict
 import numpy as np
 from utils import normalize_duration, eval_file
+from dataset_utils import NuScenesDataset
+from dataset_utils import actions, actions_dict
+from utils import cal_performance
 
-def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, device):
+def predict(args, testset, model, device):
     model.eval()
     with torch.no_grad():
+
+        obs_p = testset.obs_p
         
         eval_p = [0.1, 0.2, 0.3, 0.5]
-        pred_p = 0.5
-        NONE = n_class-1
+
         T_actions = np.zeros((len(eval_p), len(actions_dict)))
         F_actions = np.zeros((len(eval_p), len(actions_dict)))
+
+        pred_p = 0.5
+        NONE = testset.n_class-1
         actions_dict_with_NONE = copy.deepcopy(actions_dict)
         actions_dict_with_NONE['NONE'] = NONE
 
-        for i, traj_name in enumerate(traj_list):
-            features_path = data_path + '/bitmasks/'
-            scene_graphs_path = data_path + '/scene_graphs/'
-            actions_path = data_path + '/actions/'
-            features = torch.load(features_path + traj_name + '.pt')
-            scene_graphs = torch.load(scene_graphs_path + traj_name + '.pt')
-            gt_seq = torch.load(actions_path + traj_name + '.pt').int().tolist()
+        for i, data in enumerate(testset):
+
+            #features, scene_graphs, past_label, trans_dur_future, trans_future_target = data.values()
+            features, scene_graphs, _, _, _, gt_seq = data.values()
+            features = features.to(device) #[B, S, C]
+            scene_graphs = [sg.to(device) for sg in scene_graphs] #[T,B,F] a list of PyG Batches (1 per timestep)
+            gt_seq = gt_seq.int().tolist()
+
+            #======================================================================
 
             #redundant but works for now
             gt_seq = [actions[i] for i in gt_seq]
@@ -36,12 +45,11 @@ def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, 
             future_len = int(pred_p*vid_len)
 
             past_seq = gt_seq[:past_len]
-            features = features[:past_len]
-            scene_graphs = scene_graphs[:past_len]
 
             inputs = (features.unsqueeze(0), scene_graphs)
 
             outputs = model(inputs, mode='test')
+            #======================================================================
 
             output_action = outputs['action']
             output_dur = outputs['duration']
@@ -49,14 +57,14 @@ def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, 
 
             # fine the forst none class
             none_mask = None
+            none_idx = None
             for i in range(output_label.size(1)) :
                 if output_label[0,i] == NONE :
                     none_idx = i
                     break
-                else :
-                    none = None
+            none_mask = torch.ones(output_label.shape).type(torch.bool)
             if none_idx is not None :
-                none_mask = torch.ones(output_label.shape).type(torch.bool)
+                #none_mask = torch.ones(output_label.shape).type(torch.bool)
                 none_mask[0, none_idx:] = False
 
             output_dur = normalize_duration(output_dur, none_mask.to(device))
@@ -88,11 +96,11 @@ def predict(data_path, model, traj_list, obs_p, n_class, actions, actions_dict, 
                 F_actions[i] += F_action
 
         results = []
+        total_actions = T_actions + F_actions
         for i in range(len(eval_p)):
             acc = 0
             n = 0
             for j in range(len(actions_dict)):
-                total_actions = T_actions + F_actions
                 if total_actions[i,j] != 0:
                     acc += float(T_actions[i,j]/total_actions[i,j])
                     n+=1

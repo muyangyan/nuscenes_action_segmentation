@@ -40,11 +40,14 @@ def eval_file(gt_content, recog_content, obs_percentage, classes):
 
     return n_T, n_F
 
-def cal_performance(pred, gold, trg_pad_idx, smoothing=False):
+def cal_performance(pred, gold, trg_pad_idx, smoothing=False, calc_loss=True):
     # https://github.com/jadore801120/attention-is-all-you-need-pytorch
     '''Apply label smoothing if needed'''
 
-    loss = cal_loss(pred, gold.long(), trg_pad_idx, smoothing=smoothing)
+    if calc_loss:
+        loss = cal_loss(pred, gold.long(), trg_pad_idx, smoothing=smoothing)
+    else:
+        loss = None
     pred = pred.max(1)[1]
 #    gold = gold.contiguous().view(-1)
     non_pad_mask = gold.ne(trg_pad_idx)
