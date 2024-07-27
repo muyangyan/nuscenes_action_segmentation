@@ -7,12 +7,10 @@ import numpy as np
 from utils import cal_performance, normalize_duration
 
 
-def train(args, model, train_loader, optimizer, scheduler, criterion,  model_save_path, pad_idx, device):
+def train(args, model, train_loader, optimizer, scheduler, criterion, model_save_path, pad_idx, device, writer):
     model.to(device)
     model.train()
     print("Training Start")
-
-    log_file = open('log.txt', 'w')
 
     for epoch in range(args.epochs):
         epoch_acc =0
@@ -25,7 +23,6 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
         total_seg = 0
         total_seg_correct = 0
 
-        batch_loss_buffer = []
         for i, data in enumerate(train_loader):
             print('batch start %d' % i)
             optimizer.zero_grad()
@@ -92,10 +89,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
             losses.backward()
             optimizer.step()
 
-            batch_loss_buffer.append("%.6f\n" % batch_loss)
-
-        log_file.writelines(batch_loss_buffer)
-        log_file.flush()
+            writer.add_scalar('Training Loss', batch_loss, epoch * len(train_loader) + i)
 
         epoch_loss = epoch_loss / (i+1)
         print("Epoch [", (epoch+1), '/', args.epochs, '] Loss : %.3f'%epoch_loss)
@@ -103,9 +97,8 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
             accuracy = total_class_correct/total_class
             epoch_loss_class = epoch_loss_class / (i+1)
             print('Training Acc :%.3f'%accuracy, 'CE loss :%.3f'%epoch_loss_class )
-            if args.task == 'long' :
-                epoch_loss_dur = epoch_loss_dur / (i+1)
-                print('dur loss: %.5f'%epoch_loss_dur)
+            epoch_loss_dur = epoch_loss_dur / (i+1)
+            print('dur loss: %.5f'%epoch_loss_dur)
 
         if args.seg :
             acc_seg = total_seg_correct / total_seg
@@ -120,6 +113,8 @@ def train(args, model, train_loader, optimizer, scheduler, criterion,  model_sav
             torch.save(model.state_dict(), save_file)
         if not os.path.exists(save_path):
             os.makedirs(save_path)
+
+    writer.close()
 
     return model
 

@@ -36,7 +36,7 @@
             "justMyCode": false,
             "program": "main_nusc.py",
             "console": "integratedTerminal",
-            "args": "--task long --seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_layer 2 --batch_size 8 --hidden_dim 512 --max_pos_len 3100 --sample_rate 6 --epochs 70 --mode=train --input_type=nusc_bitmasks_scenegraphs --split=1"
+            "args": "--task long --seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_layer 2 --mode=train --max_pos_len 3100 --batch_size 16 --epochs 10 --lr 1e-4 --hidden_dim 512 --conv_type gat --input_type=nusc_bitmasks_scenegraphs --split=1"
         },
         {
             "name": "main_nusc",

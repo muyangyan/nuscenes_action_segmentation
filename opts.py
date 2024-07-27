@@ -1,23 +1,11 @@
 import argparse
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--model", default="futr", help='model type')
-parser.add_argument("--mode", default="train_eval", help="select action: [\"train\", \
-                    \"predict\", \"train_eval\"]")
-parser.add_argument("--dataset", type=str, default='nusc')
+#main options
 parser.add_argument('--predict', "-p", action='store_true', help="predict for whole videos mode")
-parser.add_argument('--wandb', type=str, default='project name', help="wandb runs name")
-
-#Dataset
-#breakfast
-parser.add_argument("--mapping_file", default="./datasets/breakfast/mapping.txt")
-parser.add_argument("--features_path", default="./datasets/breakfast/features/")
-parser.add_argument("--gt_path", default="./datasets/breakfast/groundTruth/")
 parser.add_argument("--split", default="1", help='split number')
-parser.add_argument("--file_path", default="./datasets/breakfast/splits")
-parser.add_argument("--model_save_path", default="./save_dir/models/transformer")
-parser.add_argument("--results_save_path", default="./save_dir/results/transformer")
-parser.add_argument("--task", type=str, help="Next Action Anticipation/long-term anticipation", default='long')
+parser.add_argument("--save_path", default="./runs")
+parser.add_argument("--input_type", type=str, default='nusc_bitmasks_scenegraphs')
 
 #Training options
 parser.add_argument("--batch_size", type=int, default=1)
@@ -30,7 +18,6 @@ parser.add_argument("--lr_mul", type=float, default=2.0)
 parser.add_argument("--weight_decay", type=float, default=5e-3) #5e-3
 parser.add_argument("-warmup", '--n_warmup_steps', type=int, default=500)
 parser.add_argument("--cpu", action='store_true', help='run in cpu')
-parser.add_argument("--sample_rate", type=int, default=3)
 parser.add_argument("--obs_perc", default=30)
 parser.add_argument("--n_query", type=int, default=8)
 
@@ -49,16 +36,23 @@ parser.add_argument("--anticipate", action='store_true', help='future anticipati
 parser.add_argument("--pos_emb", action='store_true', help='positional embedding')
 parser.add_argument("--max_pos_len", type=int, default=2000, help='position embedding number for linear interpolation')
 
-#Test on GT or decoded input
-parser.add_argument("--input_type", default="nusc_bitmasks", help="select input type: [\"decoded\", \"gt\"]")
-parser.add_argument("--runs", default=0, help="save runs")
-
 #nusc args
 #TODO: make layers selectable
 parser.add_argument("--bitmask_channels", default=10)
 
-#scene graph node embedding size
-parser.add_argument("--node_encoding_dim", default=50)
+#graph params
+parser.add_argument("--node_encoding_dim", type=int, default=49)
+parser.add_argument("--node_categorical_dim", type=int, default=44)
+parser.add_argument("--node_hidden_categorical_dim", type=int, default=5)
+parser.add_argument("--node_continuous_dim", type=int, default=5)
+parser.add_argument("--sg_hidden_dim", type=int, default=8)
+parser.add_argument("--conv_type", default='gat')
+parser.add_argument("--gat_heads", type=int, default=4)
+parser.add_argument("--gat_dropout", type=float, default=0.6)
 
-#test checkpoint number
-parser.add_argument("--checkpoint", type=int, default=0)
+
+#testing params
+parser.add_argument("--test_run", type=str, default=None)
+parser.add_argument("--test_checkpoint", type=int, default=0)
+
+

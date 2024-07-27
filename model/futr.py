@@ -34,7 +34,12 @@ class FUTR(nn.Module):
             sg_out_dim = hidden_dim
 
         self.bitmask_embed = BitmaskEmbedding(args.bitmask_channels, mask_out_dim)
-        self.scene_graph_embed = SceneGraphEmbedding(args.node_encoding_dim, 32, sg_out_dim) #[T, B, Data]
+        self.scene_graph_embed = SceneGraphEmbedding(args.node_categorical_dim, \
+                                                    args.node_hidden_categorical_dim, \
+                                                    args.node_continuous_dim, args.sg_hidden_dim, \
+                                                    sg_out_dim, conv_type=args.conv_type, \
+                                                    heads=args.gat_heads,
+                                                    dropout=args.gat_dropout) #[T, B, Data]
 
         self.transformer = Transformer(hidden_dim, n_head, num_encoder_layers, num_decoder_layers,
                                         hidden_dim*4, normalize_before=False)
