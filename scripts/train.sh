@@ -2,6 +2,7 @@
 
 PYTHON_SCRIPT="main_nusc.py"
 ARGS="--seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_layer 2 --max_pos_len 3100 \
+--save_every 5 \
 --batch_size 16 \
 --epochs 100 \
 --lr 1e-4 \
@@ -10,7 +11,9 @@ ARGS="--seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_
 --conv_type gat \
 --gat_heads 4 \
 --gat_dropout 0.6 \
---split=1"
+--split=1 \
+\
+--gnn_pool"
 PARALLEL_ARGS="--ddp --world_size 4"
 
 

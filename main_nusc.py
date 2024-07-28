@@ -133,10 +133,8 @@ def main_predict(args):
         device = torch.device('cpu')
         print('using cpu')
     else:
-        device = torch.device('gpu')
-        print('using gpu' + device)
-    print('Epoch : ', args.epochs)
-    print("batch size : ", args.batch_size)
+        device = torch.device('cuda')
+        print('using gpu')
     print("Split : ", args.split)
 
     n_class = len(actions) + 1

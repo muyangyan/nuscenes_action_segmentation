@@ -14,6 +14,7 @@ parser.add_argument("--world_size", type=int, default=None, help='number of proc
 
 
 #Training options
+parser.add_argument("--save_every", type=int, default=1)
 parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--test_batch_size", type=int, default=1)
 parser.add_argument("--epochs", type=int, default=50)
@@ -53,7 +54,7 @@ parser.add_argument("--sg_hidden_dim", type=int, default=8)
 parser.add_argument("--conv_type", default='gat')
 parser.add_argument("--gat_heads", type=int, default=4)
 parser.add_argument("--gat_dropout", type=float, default=0.6)
-
+parser.add_argument("--gnn_pool", action='store_true')
 
 #testing params
 parser.add_argument("--test_run", type=str, default=None)

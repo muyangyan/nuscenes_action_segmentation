@@ -39,7 +39,8 @@ class FUTR(nn.Module):
                                                     args.node_continuous_dim, args.sg_hidden_dim, \
                                                     sg_out_dim, conv_type=args.conv_type, \
                                                     heads=args.gat_heads,
-                                                    dropout=args.gat_dropout) #[T, B, Data]
+                                                    dropout=args.gat_dropout,
+                                                    pool=args.gnn_pool) #[T, B, Data]
 
         self.transformer = Transformer(hidden_dim, n_head, num_encoder_layers, num_decoder_layers,
                                         hidden_dim*4, normalize_before=False)

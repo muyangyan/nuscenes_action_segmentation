@@ -114,7 +114,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
 
         scheduler.step()
 
-        if epoch >= 0 :
+        if epoch >= 0 and (epoch + 1) % args.save_every == 0:
             save_file = os.path.join(model_save_path, 'checkpoint'+str(epoch)+'.ckpt')
             if args.ddp:
                 state_dict = model.module.state_dict()
