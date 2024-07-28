@@ -7,6 +7,12 @@ parser.add_argument("--split", default="1", help='split number')
 parser.add_argument("--save_path", default="./runs")
 parser.add_argument("--input_type", type=str, default='nusc_bitmasks_scenegraphs')
 
+#Training hardware and parallelization
+parser.add_argument("--cpu", action='store_true', help='run in cpu')
+parser.add_argument("--ddp", action='store_true', help='use DistributedDataParallel')
+parser.add_argument("--world_size", type=int, default=None, help='number of processes for parallelization')
+
+
 #Training options
 parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--test_batch_size", type=int, default=1)
@@ -17,7 +23,6 @@ parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--lr_mul", type=float, default=2.0)
 parser.add_argument("--weight_decay", type=float, default=5e-3) #5e-3
 parser.add_argument("-warmup", '--n_warmup_steps', type=int, default=500)
-parser.add_argument("--cpu", action='store_true', help='run in cpu')
 parser.add_argument("--obs_perc", default=30)
 parser.add_argument("--n_query", type=int, default=8)
 
@@ -41,7 +46,6 @@ parser.add_argument("--max_pos_len", type=int, default=2000, help='position embe
 parser.add_argument("--bitmask_channels", default=10)
 
 #graph params
-parser.add_argument("--node_encoding_dim", type=int, default=49)
 parser.add_argument("--node_categorical_dim", type=int, default=44)
 parser.add_argument("--node_hidden_categorical_dim", type=int, default=5)
 parser.add_argument("--node_continuous_dim", type=int, default=5)

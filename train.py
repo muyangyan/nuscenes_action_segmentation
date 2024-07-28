@@ -6,11 +6,17 @@ import pdb
 import numpy as np
 from utils import cal_performance, normalize_duration
 
+from torch.utils.tensorboard import SummaryWriter
 
-def train(args, model, train_loader, optimizer, scheduler, criterion, model_save_path, pad_idx, device, writer):
+
+def train(args, model, train_loader, optimizer, scheduler, criterion, model_save_path, log_save_path, pad_idx, device):
     model.to(device)
     model.train()
     print("Training Start")
+    
+    writer = None
+    if not args.ddp or device == 0:
+        writer = SummaryWriter(log_save_path)
 
     for epoch in range(args.epochs):
         epoch_acc =0
@@ -23,6 +29,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
         total_seg = 0
         total_seg_correct = 0
 
+        print('epoch start %d' % epoch)
         for i, data in enumerate(train_loader):
             print('batch start %d' % i)
             optimizer.zero_grad()
@@ -88,8 +95,8 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
             epoch_loss += batch_loss
             losses.backward()
             optimizer.step()
-
-            writer.add_scalar('Training Loss', batch_loss, epoch * len(train_loader) + i)
+            if writer:
+                writer.add_scalar('Training Loss', batch_loss, epoch * len(train_loader) + i)
 
         epoch_loss = epoch_loss / (i+1)
         print("Epoch [", (epoch+1), '/', args.epochs, '] Loss : %.3f'%epoch_loss)
@@ -107,14 +114,20 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
 
         scheduler.step()
 
-        save_path = os.path.join(model_save_path)
         if epoch >= 0 :
-            save_file = os.path.join(save_path, 'checkpoint'+str(epoch)+'.ckpt')
-            torch.save(model.state_dict(), save_file)
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+            save_file = os.path.join(model_save_path, 'checkpoint'+str(epoch)+'.ckpt')
+            if args.ddp:
+                state_dict = model.module.state_dict()
+                if device == 0: #only save a checkpoint from one GPU
+                    torch.save(state_dict, save_file)
+            else:
+                state_dict = model.state_dict()
+                torch.save(state_dict, save_file)
+        
+        
+    if writer:
+        writer.close()
 
-    writer.close()
 
     return model
 

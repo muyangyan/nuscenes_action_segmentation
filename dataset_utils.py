@@ -53,6 +53,8 @@ categories = [['ego', 'animal', 'human', 'movable_object', 'static_object', 'veh
               ['pedestrian', 'barrier', 'debris', 'pushable_pullable', 'trafficcone', 'bicycle_rack', 'bicycle', 'bus', 'car', 'construction', 'emergency', 'motorcycle', 'trailer', 'truck'],
               ['adult', 'child', 'construction_worker', 'personal_mobility', 'police_officer', 'stroller', 'wheelchair', 'bendy', 'rigid', 'ambulance', 'police']]
 
+node_encoding_dim = 49
+
 
 
 #visualization methods
@@ -232,16 +234,11 @@ def visualize_graph(adjacency_matrix, object_list, objects, layout, excluded_lay
 
 class NuScenesDataset(Dataset):
         
-    #pad index?
-    #nclass?
-    #nquery?
-    #other args
-    def __init__(self, root, traj_list, pad_idx, n_class, node_dim, n_query=8, obs_p=0.2, mode='test'):
+    def __init__(self, root, traj_list, pad_idx, n_class, n_query=8, obs_p=0.2, mode='test'):
         self.root = root
         self.mode = mode
         self.traj_list = []
         self.n_class = n_class
-        self.node_dim = node_dim
         self.n_query = n_query
         self.pad_idx = pad_idx
         self.obs_p = obs_p
@@ -308,7 +305,7 @@ class NuScenesDataset(Dataset):
         # turn scene graphs into PyG data:
         scene_graphs = []
         for sg, objs, cam_pose in zip(sg_adj_matrices, objects, cam_poses):
-            node_features = self.encode_objects(objs, object_tokens, cam_pose, self.node_dim)
+            node_features = self.encode_objects(objs, object_tokens, cam_pose)
 
             edge_index, edge_attr = dense_to_sparse(sg)
             edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
@@ -352,7 +349,7 @@ class NuScenesDataset(Dataset):
  
         return final_item
 
-    def encode_object(self, object, cam_pose, dim):
+    def encode_object(self, object, cam_pose):
         #fixed_dim = 5 + len(non_geometric_layers) + sum(len(categories[i]) for i in len(categories))
         #poly_dim = dim - fixed_dim
 
@@ -393,20 +390,20 @@ class NuScenesDataset(Dataset):
 
         embedding = torch.cat((category[0], category[1], category[2], layer, type, pos, orientation, area))
 
-        assert len(embedding) == dim
+        assert len(embedding) == node_encoding_dim
 
         return embedding
 
 
-    def encode_objects(self, objs, object_tokens, cam_pos, dim):
-        embedded_objects = torch.zeros((len(object_tokens), dim))
+    def encode_objects(self, objs, object_tokens, cam_pos):
+        embedded_objects = torch.zeros((len(object_tokens), node_encoding_dim))
         for i, token in enumerate(object_tokens):
             if token not in objs.keys():
                 continue
 
             object = objs[token]
 
-            embedded_objects[i] = self.encode_object(object, cam_pos, dim)
+            embedded_objects[i] = self.encode_object(object, cam_pos)
         return embedded_objects
         
 
