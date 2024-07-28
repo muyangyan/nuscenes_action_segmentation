@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Attach",
+            "type": "python",
+            "request": "attach",
+            "connect": {
+              "host": "127.0.0.1", // replace this with remote machine name
+              "port": 5678
+            }
+        },
+        {
             "name": "predict_nusc_bm_sg",
             "type": "debugpy",
             "request": "launch",
@@ -12,14 +21,6 @@
             "program": "main_nusc.py",
             "console": "integratedTerminal",
             "args": "--hidden_dim 512 --n_encoder_layer 2 --n_decoder_layer 2 --n_query 20 --seg --task long --pos_emb --input_type=nusc_bitmasks_scenegraphs --anticipate --max_pos_len 3100 --sample_rate 6 --predict --mode=train --split=1 --checkpoint 22"
-        },
-        {
-            "name": "test",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "main_nusc.py",
-            "console": "integratedTerminal",
-            "args": "--hidden_dim 512 --n_encoder_layer 2 --n_decoder_layer 2 --n_query 20 --seg --task long --pos_emb --anticipate --max_pos_len 3100 --sample_rate 6 --dataset nusc --predict --mode=train --split=1"
         },
         {
             "name": "train_bitmasks",
@@ -39,20 +40,6 @@
             "args": "--task long --seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_layer 2 --mode=train --max_pos_len 3100 --batch_size 16 --epochs 10 --lr 1e-4 --hidden_dim 512 --conv_type gat --input_type=nusc_bitmasks_scenegraphs --split=1"
         },
         {
-            "name": "main_nusc",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "main_nusc.py",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "render",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "render.py",
-            "console": "integratedTerminal"
-        },
-        {
             "name": "create_dataset_mini",
             "type": "debugpy",
             "request": "launch",
@@ -67,14 +54,6 @@
             "program": "dataset_generation/create_dataset.py",
             "console": "integratedTerminal",
             "args": "--version v1.0-trainval --start_idx 392 "
-        },
-        {
-            "name": "action seg",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "action_seg.py",
-            "console": "integratedTerminal",
-            "args": ""
         }
     ]
 }

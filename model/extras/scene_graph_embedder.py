@@ -16,12 +16,17 @@ class SceneGraphEmbedding(nn.Module):
         self.categorical_init = nn.Linear(categorical_dim, hidden_categorical_dim)
         self.lin_init = nn.Linear(in_dim, hidden_dim)
 
+        flow = 'source_to_target'
+        if not pool:
+            #if we are just taking the final ego embedding, we need message passing to converge to ego
+            flow = 'target_to_source'
+
         if conv_type == 'gcn':
-            self.conv1 = GCNConv(hidden_dim, hidden_dim)
-            self.conv2 = GCNConv(hidden_dim, hidden_dim)
+            self.conv1 = GCNConv(hidden_dim, hidden_dim, flow=flow)
+            self.conv2 = GCNConv(hidden_dim, hidden_dim, flow=flow)
         elif conv_type == 'gat':
-            self.conv1 = GATv2Conv(hidden_dim, hidden_dim, heads=heads, dropout=dropout)
-            self.conv2 = GATv2Conv(hidden_dim * heads, hidden_dim, heads=1)
+            self.conv1 = GATv2Conv(hidden_dim, hidden_dim, heads=heads, dropout=dropout, flow=flow)
+            self.conv2 = GATv2Conv(hidden_dim * heads, hidden_dim, heads=1, flow=flow)
         self.lin_out = nn.Linear(hidden_dim, out_dim)
         #TODO: try with GAT
 

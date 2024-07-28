@@ -1,6 +1,11 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import torch.distributed
+import torch.multiprocessing
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 import os
 from opts import parser
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
@@ -31,6 +36,9 @@ device = torch.device('cuda')
 
 data_path = '/data/Datasets/nuscenes_custom/data'
 
+def ddp_setup(rank, world_size):
+    
+
 def main():
     args = parser.parse_args()
 
@@ -59,7 +67,13 @@ def main():
                             n_query=args.n_query, n_head=args.n_head,
                             num_encoder_layers=args.n_encoder_layer, num_decoder_layers=args.n_decoder_layer).to(device)
 
-    model = nn.DataParallel(model).to(device)
+    #model = nn.DataParallel(model, device_ids=[0,1]).to(device)
+
+    init_process_group(
+        backend='nccl', world_size=2, init_method='...'
+    )
+    model = nn.DistributedDataParallel(model)
+
     model = model.to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -68,6 +82,7 @@ def main():
     criterion = nn.MSELoss(reduction = 'none')
 
 
+    #TODO: create way to save prediction results
     if args.predict :
         obs_perc = [0.2, 0.3, 0.5]
         run_path = os.path.join(args.save_path, args.test_run)
