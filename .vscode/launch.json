@@ -15,6 +15,7 @@
         {
             "name": "Python Attach",
             "type": "python",
+            "justMyCode": false,
             "request": "attach",
             "connect": {
               "host": "127.0.0.1", // replace this with remote machine name

@@ -39,6 +39,7 @@ class FUTR(nn.Module):
         self.bitmask_embed = BitmaskEmbedding(args.bitmask_channels, mask_out_dim)
         self.scene_graph_embed = SceneGraphEmbedding(args.node_categorical_dim, \
                                                     args.node_hidden_categorical_dim, \
+                                                    args.hidden_edge_dim, \
                                                     args.node_continuous_dim, args.sg_hidden_dim, \
                                                     sg_out_dim, conv_type=args.conv_type, \
                                                     heads=args.gat_heads,
@@ -106,7 +107,7 @@ class FUTR(nn.Module):
                 embeddings_list = []
                 for time_step in scene_graphs:
                     # time_step is a Batch object
-                    batch_embeddings = self.scene_graph_embed(time_step.x, time_step.edge_index, time_step.batch)
+                    batch_embeddings = self.scene_graph_embed(time_step.x, time_step.edge_index, time_step.edge_attr, time_step.batch)
                     trajs, feature_dim = batch_embeddings.size()
                     padding = torch.zeros((B - trajs, feature_dim)).to(self.device)
                     batch_embeddings = torch.cat((batch_embeddings, padding), 0)

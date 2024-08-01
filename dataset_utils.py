@@ -310,6 +310,7 @@ class NuScenesDataset(Dataset):
             node_features = self.encode_objects(objs, object_tokens, cam_pose)
 
             edge_index, edge_attr = dense_to_sparse(sg)
+            edge_attr = self.encode_edges(edge_attr)
             edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
 
             node_features = mask_select(node_features, 0, mask)
@@ -350,6 +351,13 @@ class NuScenesDataset(Dataset):
             final_item.update({'actions' : item['actions']})
  
         return final_item
+
+    def encode_edges(self, edge_attr):
+        encodings = []
+        for e in edge_attr:
+            one_hot = torch.eye(len(edge_labels))[int(e.item())]
+            encodings.append(one_hot)
+        return torch.stack(encodings)
 
     def encode_object(self, object, cam_pose):
         #fixed_dim = 5 + len(non_geometric_layers) + sum(len(categories[i]) for i in len(categories))
