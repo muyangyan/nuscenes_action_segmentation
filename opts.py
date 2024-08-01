@@ -19,7 +19,7 @@ parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--test_batch_size", type=int, default=1)
 parser.add_argument("--epochs", type=int, default=50)
 parser.add_argument("--warmup_epochs", type=int, default=10)
-parser.add_argument("--workers", type=int, default= 30)
+parser.add_argument("--workers", type=int, default= 10)
 parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--lr_mul", type=float, default=2.0)
 parser.add_argument("--weight_decay", type=float, default=5e-3) #5e-3

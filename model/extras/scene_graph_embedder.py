@@ -28,12 +28,12 @@ class SceneGraphEmbedding(nn.Module):
             self.conv1 = GATv2Conv(hidden_dim, hidden_dim, heads=heads, dropout=dropout, flow=flow)
             self.conv2 = GATv2Conv(hidden_dim * heads, hidden_dim, heads=1, flow=flow)
         self.lin_out = nn.Linear(hidden_dim, out_dim)
-        #TODO: try with GAT
 
     def forward(self, x, edge_index, batch):
 
         #encoding is set up such that the very first dim is the one-hot encoding for 'ego'
-        ego_index = torch.argmax(x.T[0]).item()
+        ego_mask = [i[0]==1 for i in x]
+        ego_mask = [e.item() for e in ego_mask]
 
         #embed categorical variables first, then reconcat with x
         s = x[:, :self.categorical_dim]
@@ -52,7 +52,12 @@ class SceneGraphEmbedding(nn.Module):
             x = global_mean_pool(x, batch)
             x = self.lin_out(x)
         else:
+            #mask = [b==ego_index for b in batch]
+            x = x[ego_mask]
+            remainder = max(batch) - len(ego_mask) 
+            if remainder > 0:
+                x = torch.cat((x,torch.zeros(remainder, x.size()[1])), 0)
+
             x = self.lin_out(x)
-            x = x[ego_index]
             
         return x

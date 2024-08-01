@@ -46,7 +46,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
             target = trans_future_target
             if args.input_type in ['i3d_transcript', 'nusc_bitmasks']:
                 inputs = (features, None, past_label)
-            elif args.input_type == 'nusc_bitmasks_scenegraphs':
+            elif args.input_type in ['nusc_bitmasks_scenegraphs', 'nusc_scenegraphs']:
                 inputs = (features, scene_graphs, past_label)
             elif args.input_type == 'gt':
                 gt_features = past_label.int()

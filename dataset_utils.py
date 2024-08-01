@@ -260,6 +260,8 @@ class NuScenesDataset(Dataset):
         traj_file, obs_perc = self.traj_list[idx]
         obs_perc = float(obs_perc)
         item = self._make_input(traj_file, obs_perc)
+        if self.mode == 'test':
+            return traj_file, item
         return item
 
     def _make_input(self, traj_file, obs_perc):

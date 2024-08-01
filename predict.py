@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy
 import pdb
 import os
+import json
+import pandas as pd
 import copy
 from collections import defaultdict
 import numpy as np
@@ -27,7 +29,8 @@ def predict(args, testset, model, device):
         actions_dict_with_NONE = copy.deepcopy(actions_dict)
         actions_dict_with_NONE['NONE'] = NONE
 
-        for i, data in enumerate(testset):
+        products = []
+        for idx, (traj, data) in enumerate(testset):
 
             #features, scene_graphs, past_label, trans_dur_future, trans_future_target = data.values()
             features, scene_graphs, _, _, _, gt_seq = data.values()
@@ -46,7 +49,10 @@ def predict(args, testset, model, device):
 
             past_seq = gt_seq[:past_len]
 
-            inputs = (features.unsqueeze(0), scene_graphs)
+            if args.input_type in ["nusc_bitmasks_scenegraphs", "nusc_scenegraphs"]:
+                inputs = (features.unsqueeze(0), scene_graphs)
+            elif args.input_type == "nusc_bitmasks":
+                inputs = (features.unsqueeze(0), None)
 
             outputs = model(inputs, mode='test')
             #======================================================================
@@ -95,6 +101,12 @@ def predict(args, testset, model, device):
                 T_actions[i] += T_action
                 F_actions[i] += F_action
 
+            #save actual results to files
+            product = {'traj':traj, 'obs_p':obs_p, 'past_len':past_len, 'gt_seq':gt_seq, 'prediction':list(prediction)}
+            products.append(product)
+
+        products_df = pd.DataFrame(products)
+
         results = []
         total_actions = T_actions + F_actions
         for i in range(len(eval_p)):
@@ -110,5 +122,4 @@ def predict(args, testset, model, device):
             print(result)
         print('--------------------------------')
 
-            
-        return
+        return products_df

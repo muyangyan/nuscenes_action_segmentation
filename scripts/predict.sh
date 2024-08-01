@@ -2,6 +2,7 @@
 
 PYTHON_SCRIPT="main_nusc.py"
 ARGS="--predict --seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_layer 2 --max_pos_len 3100 \
+--input_type nusc_scenegraphs \
 --batch_size 16 \
 --epochs 9999 \
 --lr 1e-4 \
@@ -12,8 +13,8 @@ ARGS="--predict --seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --
 --gat_dropout 0.6 \
 --split=1 \
 --gnn_pool \
---test_run roaring-reflection \
---test_checkpoint 99"
+--test_run quadratic-burger \
+--test_checkpoint 29"
 PARALLEL_ARGS="--ddp --world_size 4"
 
 

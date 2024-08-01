@@ -29,8 +29,11 @@ class FUTR(nn.Module):
         if args.input_type == 'nusc_bitmasks_scenegraphs':
             mask_out_dim = hidden_dim//2
             sg_out_dim = hidden_dim//2
-        else:
+        elif args.input_type == 'nusc_bitmasks':
             mask_out_dim = hidden_dim
+            sg_out_dim = 1
+        elif args.input_type == 'nusc_scenegraphs':
+            mask_out_dim = 1
             sg_out_dim = hidden_dim
 
         self.bitmask_embed = BitmaskEmbedding(args.bitmask_channels, mask_out_dim)
@@ -92,13 +95,14 @@ class FUTR(nn.Module):
         elif self.args.input_type == 'gt':
             B, S = src.size()
             src = self.gt_emb(src)
-        elif self.args.input_type in ['nusc_bitmasks', 'nusc_bitmasks_scenegraphs']:
+        else:
             B, S, C, H, W = src.size()
-            src = src.view(-1, C, H, W)
-            src = self.bitmask_embed(src) #[B*S, C, H, W] -> [B*S, F]
-            src = src.view(B, S, -1)
-        
-            if scene_graphs != None:
+            if self.args.input_type in ['nusc_bitmasks', 'nusc_bitmasks_scenegraphs']:
+                src = src.view(-1, C, H, W)
+                src = self.bitmask_embed(src) #[B*S, C, H, W] -> [B*S, F]
+                src = src.view(B, S, -1)
+            
+            if self.args.input_type in ['nusc_scenegraphs', 'nusc_bitmasks_scenegraphs']:
                 embeddings_list = []
                 for time_step in scene_graphs:
                     # time_step is a Batch object
@@ -110,8 +114,10 @@ class FUTR(nn.Module):
 
                 sg_src = torch.stack(embeddings_list)
                 sg_src = rearrange(sg_src, 't b c -> b t c')
-                src = torch.cat((src, sg_src), 2) #concat with src along F
-
+                if self.args.input_type == 'nusc_scenegraphs':
+                    src = sg_src
+                else:
+                    src = torch.cat((src, sg_src), 2) #concat with src along F
 
         src = F.relu(src)
 

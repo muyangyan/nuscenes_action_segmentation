@@ -21,6 +21,7 @@ from predict import predict
 
 from dataset_utils import *
 import randomname
+import pandas as pd
 
 
 
@@ -87,7 +88,7 @@ def prepare_train_objs(args, n_class, pad_idx, device):
     return model, optimizer, scheduler, criterion
 
 def prepare_dataloader(args, data_path, traj_list, pad_idx, n_class):
-    dataset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query)
+    dataset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query, mode='train')
     if args.ddp:
         dataloader = DataLoader(dataset, batch_size=args.batch_size, \
                                                     shuffle=False, num_workers=args.workers,
@@ -153,10 +154,20 @@ def main_predict(args):
     model.load_state_dict(torch.load(model_path))
     model.to(device)
 
+    dfs = []
     for obs_p in obs_perc :
         testset = NuScenesDataset(data_path, test_traj_list, pad_idx, n_class, n_query=args.n_query, obs_p=obs_p, mode='test')
-        #predict(data_path, model, test_traj_list, obs_p, n_class, actions, actions_dict, device)
-        predict(args, testset, model, device)
+        this_df = predict(args, testset, model, device)
+        dfs.append(this_df)
+    products_df = pd.concat(dfs)
+
+    results_path = os.path.join(args.save_path, args.test_run, 'results')
+    if not os.path.exists(results_path):
+        os.makedirs(results_path)
+    filename = 'products.csv'
+    products_file = os.path.join(results_path, filename)
+    products_df.to_csv(products_file)
+    
 
 if __name__ == '__main__':
     args = parser.parse_args()
