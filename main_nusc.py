@@ -88,7 +88,7 @@ def prepare_train_objs(args, n_class, pad_idx, device):
     return model, optimizer, scheduler, criterion
 
 def prepare_dataloader(args, data_path, traj_list, pad_idx, n_class):
-    dataset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query, mode='train')
+    dataset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query, mode='train', input_type=args.input_type)
     if args.ddp:
         dataloader = DataLoader(dataset, batch_size=args.batch_size, \
                                                     shuffle=False, num_workers=args.workers,

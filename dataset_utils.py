@@ -234,7 +234,7 @@ def visualize_graph(adjacency_matrix, object_list, objects, layout, excluded_lay
 
 class NuScenesDataset(Dataset):
         
-    def __init__(self, root, traj_list, pad_idx, n_class, n_query=8, obs_p=0.2, mode='test'):
+    def __init__(self, root, traj_list, pad_idx, n_class, n_query=8, obs_p=0.2, mode='test', input_type='nusc_bitmasks_scenegraphs'):
         self.root = root
         self.mode = mode
         self.traj_list = []
@@ -242,6 +242,7 @@ class NuScenesDataset(Dataset):
         self.n_query = n_query
         self.pad_idx = pad_idx
         self.obs_p = obs_p
+        self.input_type = input_type
         self.NONE = self.n_class - 1
 
         if self.mode == 'train' or self.mode == 'val':
@@ -304,19 +305,22 @@ class NuScenesDataset(Dataset):
         object_tokens = metadata['object_tokens']
         #object_dict = { v:i for i,v in enumerate(object_tokens) } #maps token to index in object_tokens
 
-        # turn scene graphs into PyG data:
-        scene_graphs = []
-        for sg, objs, cam_pose in zip(sg_adj_matrices, objects, cam_poses):
-            node_features = self.encode_objects(objs, object_tokens, cam_pose)
+        if self.input_type in ['nusc_bitmasks_scenegraphs', 'nusc_scenegraphs']:
+            # turn scene graphs into PyG data:
+            scene_graphs = []
+            for sg, objs, cam_pose in zip(sg_adj_matrices, objects, cam_poses):
+                node_features = self.encode_objects(objs, object_tokens, cam_pose)
 
-            edge_index, edge_attr = dense_to_sparse(sg)
-            edge_attr = self.encode_edges(edge_attr)
-            edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
+                edge_index, edge_attr = dense_to_sparse(sg)
+                edge_attr = self.encode_edges(edge_attr)
+                edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
 
-            node_features = mask_select(node_features, 0, mask)
+                node_features = mask_select(node_features, 0, mask)
 
-            data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
-            scene_graphs.append(data)
+                data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
+                scene_graphs.append(data)
+        else:
+            scene_graphs = None
 
 
         future_content = \
@@ -425,10 +429,6 @@ class NuScenesDataset(Dataset):
         b_trans_future_dur = [item['trans_future_dur'] for item in batch]
         b_trans_future_target = [item['trans_future_target'] for item in batch]
 
-        b_scene_graphs = [item['scene_graphs'] for item in batch]
-
-        batch_size = len(batch)
-
         b_features = torch.nn.utils.rnn.pad_sequence(b_features, batch_first=True, padding_value=0) #[B, S, C]
         b_past_label = torch.nn.utils.rnn.pad_sequence(b_past_label, batch_first=True,
                                                          padding_value=self.pad_idx)
@@ -436,17 +436,23 @@ class NuScenesDataset(Dataset):
                                                         padding_value=self.pad_idx)
         b_trans_future_target = torch.nn.utils.rnn.pad_sequence(b_trans_future_target, batch_first=True, padding_value=self.pad_idx)
 
-        #batch scene graphs by timestep
-        max_time = max(len(series) for series in b_scene_graphs)
-        batched_data = []
-        for t in range(max_time):
-            graphs_at_t = [series[t] if t < len(series) else None for series in b_scene_graphs]
-            graphs_at_t = [g for g in graphs_at_t if g is not None]
-            if graphs_at_t:
-                batched_data.append(Batch.from_data_list(graphs_at_t))
-            else:
-                batched_data.append(None)
-        b_scene_graphs = batched_data
+
+        if self.input_type in ['nusc_bitmasks_scenegraphs', 'nusc_scenegraphs']:
+            b_scene_graphs = [item['scene_graphs'] for item in batch]
+
+            #batch scene graphs by timestep
+            max_time = max(len(series) for series in b_scene_graphs)
+            batched_data = []
+            for t in range(max_time):
+                graphs_at_t = [series[t] if t < len(series) else None for series in b_scene_graphs]
+                graphs_at_t = [g for g in graphs_at_t if g is not None]
+                if graphs_at_t:
+                    batched_data.append(Batch.from_data_list(graphs_at_t))
+                else:
+                    batched_data.append(None)
+            b_scene_graphs = batched_data
+        else:
+            b_scene_graphs = None
 
         batch = [b_features, b_scene_graphs, b_past_label, b_trans_future_dur, b_trans_future_target]
 
