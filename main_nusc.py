@@ -88,16 +88,20 @@ def prepare_train_objs(args, n_class, pad_idx, device):
     return model, optimizer, scheduler, criterion
 
 def prepare_dataloader(args, data_path, traj_list, pad_idx, n_class):
-    dataset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query, mode='train', input_type=args.input_type)
+    dataset = NuScenesDataset(data_path, traj_list, pad_idx, n_class, n_query=args.n_query, mode='train', input_type=args.input_type, pyg=args.pyg)
     if args.ddp:
         dataloader = DataLoader(dataset, batch_size=args.batch_size, \
                                                     shuffle=False, num_workers=args.workers,
                                                     collate_fn=dataset.my_collate,
-                                                    sampler=DistributedSampler(dataset))
+                                                    sampler=DistributedSampler(dataset),
+                                                    prefetch_factor=args.prefetch_factor,
+                                                    persistent_workers=True,
+                                                    pin_memory=True)
     else:
         dataloader = DataLoader(dataset, batch_size=args.batch_size, \
                                                     shuffle=True, num_workers=args.workers,
-                                                    collate_fn=dataset.my_collate)
+                                                    collate_fn=dataset.my_collate,
+                                                    prefetch_factor=args.prefetch_factor)
     return dataloader
 
 def main_train(device, args, model_save_path, log_save_path, world_size=None):
@@ -154,19 +158,25 @@ def main_predict(args):
     model.load_state_dict(torch.load(model_path))
     model.to(device)
 
-    dfs = []
+    products_dfs = []
+    results_dfs = []
     for obs_p in obs_perc :
-        testset = NuScenesDataset(data_path, test_traj_list, pad_idx, n_class, n_query=args.n_query, obs_p=obs_p, mode='test')
-        this_df = predict(args, testset, model, device)
-        dfs.append(this_df)
-    products_df = pd.concat(dfs)
+        testset = NuScenesDataset(data_path, test_traj_list, pad_idx, n_class, n_query=args.n_query, obs_p=obs_p, mode='test', input_type=args.input_type)
+        this_product, this_result = predict(args, testset, model, device)
+        products_dfs.append(this_product)
+        results_dfs.append(this_result)
+
+    products_df = pd.concat(products_dfs)
+    results_df = pd.concat(results_dfs)
 
     results_path = os.path.join(args.save_path, args.test_run, 'results')
     if not os.path.exists(results_path):
         os.makedirs(results_path)
-    filename = 'products.csv'
-    products_file = os.path.join(results_path, filename)
+    products_file = os.path.join(results_path, 'products.csv')
+    results_file = os.path.join(results_path, 'results.csv')
+
     products_df.to_csv(products_file)
+    results_df.to_csv(results_file)
     
 
 if __name__ == '__main__':

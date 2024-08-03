@@ -2,7 +2,7 @@
 
 PYTHON_SCRIPT="main_nusc.py"
 ARGS="--predict --seg --anticipate --pos_emb --n_query 20 --n_encoder_layer 2 --n_decoder_layer 2 --max_pos_len 3100 \
---input_type nusc_bitmasks \
+--input_type nusc_scenegraphs \
 --batch_size 16 \
 --epochs 9999 \
 --lr 1e-4 \

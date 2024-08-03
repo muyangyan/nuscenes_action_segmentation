@@ -12,6 +12,9 @@ parser.add_argument("--cpu", action='store_true', help='run in cpu')
 parser.add_argument("--ddp", action='store_true', help='use DistributedDataParallel')
 parser.add_argument("--world_size", type=int, default=None, help='number of processes for parallelization')
 
+#data params: load adjacency matrices or pyg Data
+parser.add_argument("--pyg", action='store_true')
+
 
 #Training options
 parser.add_argument("--save_every", type=int, default=1)
@@ -19,7 +22,8 @@ parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--test_batch_size", type=int, default=1)
 parser.add_argument("--epochs", type=int, default=50)
 parser.add_argument("--warmup_epochs", type=int, default=10)
-parser.add_argument("--workers", type=int, default= 10)
+parser.add_argument("--workers", type=int, default= 64)
+parser.add_argument("--prefetch_factor", type=int, default= 4)
 parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--lr_mul", type=float, default=2.0)
 parser.add_argument("--weight_decay", type=float, default=5e-3) #5e-3

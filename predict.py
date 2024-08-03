@@ -35,7 +35,8 @@ def predict(args, testset, model, device):
             #features, scene_graphs, past_label, trans_dur_future, trans_future_target = data.values()
             features, scene_graphs, _, _, _, gt_seq = data.values()
             features = features.to(device) #[B, S, C]
-            scene_graphs = [sg.to(device) for sg in scene_graphs] #[T,B,F] a list of PyG Batches (1 per timestep)
+            if args.input_type in ['nusc_bitmasks_scenegraphs', 'nusc_scenegraphs']:
+                scene_graphs = [sg.to(device) for sg in scene_graphs] #[T,B,F] a list of PyG Batches (1 per timestep)
             gt_seq = gt_seq.int().tolist()
 
             #======================================================================
@@ -116,10 +117,12 @@ def predict(args, testset, model, device):
                 if total_actions[i,j] != 0:
                     acc += float(T_actions[i,j]/total_actions[i,j])
                     n+=1
-
-            result = 'obs. %d '%int(100*obs_p) + 'pred. %d '%int(100*eval_p[i])+'--> MoC: %.4f'%(float(acc)/n)
-            results.append(result)
-            print(result)
+            moc = float(acc)/n
+            results.append({'obs_perc':obs_p, 'pred_perc':eval_p[i], 'MoC':moc})
+            result_str = 'obs. %d '%int(100*obs_p) + 'pred. %d '%int(100*eval_p[i])+'--> MoC: %.4f'%(moc)
+            print(result_str)
         print('--------------------------------')
 
-        return products_df
+        results_df = pd.DataFrame(results)
+
+        return products_df, results_df

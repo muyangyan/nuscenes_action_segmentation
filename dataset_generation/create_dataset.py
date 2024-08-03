@@ -7,6 +7,9 @@ from dataset_generation.nuscenes_utils import *
 
 from shapely.geometry import Polygon
 
+from torch_geometric.data import Data, Batch
+from torch_geometric.utils import dense_to_sparse, remove_isolated_nodes, mask_select
+
 import torch
 import pickle
 import argparse
@@ -16,6 +19,7 @@ import json
 import warnings
 
 from dataset_utils import actions, actions_dict, edges_dict
+from dataset_utils import encode_edges, encode_object, encode_objects
 from dataset_generation.scene_graph_predicates import *
 
 warnings.filterwarnings("ignore")
@@ -58,10 +62,6 @@ def output_trajectory(datafolder, data, metadata, name):
             os.makedirs(path)
             print('path %s not found, creating' % path)
         
-        # how to name the files?
-        # Scene number and then index?
-        # for now, just a number will do. will need to change when we have splits
-
         if key in non_torch_keys:
             with open(path + '/' + name + '.pkl', 'wb') as file:
                 pickle.dump(data[key], file)
@@ -252,11 +252,11 @@ def predict_edges(src, dest, map_buffer_radius, instance_dist_threshhold):
     return edges_dict['NONE']
 
 '''
-object_dict maps object tokens to their index in the object_token list in the outer context
+object_dict maps object tokens to their index in the object_tokens list in outer context
 objects is a dictionary containing the CURRENT objects in the frame and their CURRENT data
 output is a 2D torch tensor adjacency matrix (H,W) of integers denoting edge label
 '''
-def create_scene_graph(args, objects, object_dict):
+def create_scene_graph_adj(args, objects, object_dict):
 
     n = len(object_dict) #total
     m = len(objects) #visible
@@ -275,6 +275,27 @@ def create_scene_graph(args, objects, object_dict):
             adj_matrix[i][j] = predict_edges(src, dest, args.map_buffer_radius, args.instance_dist_threshhold)
 
     return adj_matrix
+
+'''
+adj_matrix is the adjacency matrix we want to convert to pyg
+cam_pose is the position of the camera at this frame so we can encode the object relative to the camera
+objects is a dictionary containing the CURRENT objects in the frame and their CURRENT data
+object_tokens is the reverse of object_dict
+'''
+
+def create_scene_graph_pyg(adj_matrix, cam_pose, objects, object_tokens):
+
+    node_features = encode_objects(objects, object_tokens, cam_pose)
+
+    edge_index, edge_attr = dense_to_sparse(adj_matrix)
+    edge_attr = encode_edges(edge_attr)
+    edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
+
+    node_features = mask_select(node_features, 0, mask)
+
+    data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
+
+    return data
 
 def get_frame_data(args, pose, frame):
     #to make the scene graph, we need the annotated instances as well as the road elements visible within our view
@@ -301,6 +322,62 @@ def get_frame_data(args, pose, frame):
     action_idx = actions_dict[action_key]
 
     return {'bitmask':bitmask, 'objects':objects, 'action':action_idx}
+
+
+#just adds pyg to the dataset, created because initial dataset was not in pyg format
+def create_pyg(args):
+    print("JUST PYG")
+    
+    version = args.version
+    viewport_radius = args.viewport_radius
+    datafolder = args.datafolder
+    trajs_per_scene = args.trajs_per_scene
+    noise_radius = args.noise_radius
+    start_idx = args.start_idx
+    end_idx = args.end_idx
+    overwrite = args.overwrite
+
+    nusc = NuScenes(version=version, dataroot=dataroot, verbose=True)
+    args.nusc = nusc
+
+    idxs = range(start_idx, end_idx)
+
+    for idx in idxs:
+        traj_idx = idx + start_idx
+
+        if overwrite == False:
+            if os.path.exists(datafolder + '/' + 'scene_graphs_pyg' + '/' + str(traj_idx) + '.pt'):
+                continue
+
+        scene_graphs_pyg = []
+
+        name = str(traj_idx)
+
+        scene_graphs_adj = torch.load(os.path.join(datafolder, 'scene_graphs_adj', name+'.pt'))
+        traj = torch.load(os.path.join(datafolder, 'cam_poses', name+'.pt'))
+
+        obj_path = os.path.join(datafolder, 'objects', name+'.pkl')
+        with open(obj_path, 'rb') as file:
+            objects = pickle.load(file)
+
+        metadata_path = os.path.join(datafolder, 'metadata', name+'.json')
+        with open(metadata_path, 'r') as file:
+            metadata = json.load(file)
+        
+        object_tokens = metadata['object_tokens']
+
+        for time_idx, frame_objs in enumerate(objects):
+            #scene graph creation
+            sg_adj = scene_graphs_adj[time_idx]
+            sg_pyg = create_scene_graph_pyg(sg_adj, traj[time_idx], frame_objs, object_tokens)
+            scene_graphs_pyg.append(sg_pyg)
+        
+        #no need to stack pyg scene graphs, we will simply torch.save them as a list of pyg Data objs
+
+        path = os.path.join(datafolder, 'scene_graphs_pyg')
+        torch.save(scene_graphs_pyg, path + '/' + name + '.pt')
+        print('written:', name)
+    print('done')
 
 def main(args):
 
@@ -350,14 +427,12 @@ def main(args):
 
         scene_idx = traj_scene_map[traj_idx]
 
+        #first pass collects object tokens-------------------
         bitmasks = []
-        scene_graphs = []
         objects = []
         actions = []
 
         object_tokens = set()
-
-        #first pass collects object tokens
         for time_idx, pose in enumerate(traj):
             scene_frame = scene_data[scene_idx][time_idx]
             frame_data = get_frame_data(args, pose, scene_frame)
@@ -371,17 +446,25 @@ def main(args):
         object_tokens = [t for t in object_tokens] #assign indices to objects
         object_dict = { v:i for i,v in enumerate(object_tokens) } #maps token to index in object_tokens
 
-        #second pass create scene graphs
-        for time_idx, frame_objs in enumerate(objects):
-            #scene graph creation
-            scene_graphs.append(create_scene_graph(args, frame_objs, object_dict))
-        
         traj = torch.Tensor(traj)
         actions = torch.Tensor(actions)
         bitmasks = torch.stack(bitmasks)
-        scene_graphs = torch.stack(scene_graphs)
 
-        data = {'cam_poses':traj, 'bitmasks':bitmasks, 'scene_graphs':scene_graphs, 'objects':objects, 'actions':actions}
+        #second pass create scene graphs--------------------
+        scene_graphs_adj = []
+        scene_graphs_pyg = []
+
+        for time_idx, frame_objs in enumerate(objects):
+            #scene graph creation
+            sg_adj = create_scene_graph_adj(args, frame_objs, object_dict)
+            sg_pyg = create_scene_graph_pyg(sg_adj, traj[time_idx], frame_objs, object_tokens)
+            scene_graphs_adj.append(sg_adj)
+            scene_graphs_pyg.append(sg_pyg)
+        
+        scene_graphs_adj = torch.stack(scene_graphs_adj)
+        #no need to stack pyg scene graphs, we will simply torch.save them as a list of pyg Data objs
+
+        data = {'cam_poses':traj, 'bitmasks':bitmasks, 'scene_graphs_adj':scene_graphs_adj, 'scene_graphs_pyg':scene_graphs_pyg, 'objects':objects, 'actions':actions}
 
         metadata = {'scene_idx':scene_idx, 'object_tokens':object_tokens}
 
@@ -410,7 +493,13 @@ parser.add_argument('--overwrite', type=bool, default=False)
 parser.add_argument('--map_buffer_radius', type=float, default=1)
 parser.add_argument('--instance_dist_threshhold', type=float, default=10)
 
+
+parser.add_argument('--just_pyg', action='store_true')
+
 args = parser.parse_args()
 
-main(args)
+if args.just_pyg:
+    create_pyg(args)
+else:
+    main(args)
 

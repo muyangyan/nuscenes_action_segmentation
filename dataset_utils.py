@@ -229,12 +229,73 @@ def visualize_graph(adjacency_matrix, object_list, objects, layout, excluded_lay
     plt.tight_layout()
     return fig
 
+#scene graph encoding methods
+def encode_edges(edge_attr):
+    encodings = [torch.eye(len(edge_labels))[int(e.item())] for e in edge_attr]
+    return torch.stack(encodings)
+
+def encode_object(object, cam_pose):
+    #fixed_dim = 5 + len(non_geometric_layers) + sum(len(categories[i]) for i in len(categories))
+    #poly_dim = dim - fixed_dim
+
+    type = torch.zeros(2)
+    layer = torch.zeros(len(non_geometric_layers))
+    category = [torch.zeros(len(c)) for c in categories]
+    pos = torch.zeros(2) # x, y relative to cam pos
+    orientation = torch.zeros(2) # cos(yaw), sin(yaw)
+    area = torch.zeros(1) #area as fraction of viewport area
+    if object['type'] == 'map':
+        type[0] = 1
+
+        layer_index = non_geometric_layers.index(object['layer'])
+        layer[layer_index] = 1
+
+        if object['layer'] == 'drivable_area':
+            geom = object['geoms'][0]
+            #possible edge case: geoms is a list of many Polygons, must be made into MultiPolygon
+        else:
+            geom = object['geom']
+        #normalize all values relative to viewport center, size
+        pos[0] = (geom.centroid.x - cam_pose[0]) / cam_pose[3]
+        pos[1] = (geom.centroid.y - cam_pose[1]) / cam_pose[3]
+        area[0] = geom.area / (4 * (cam_pose[3] ** 2))
+
+    else:
+        type[1] = 1
+        category_string = object['category']
+        substrings = category_string.split('.')
+        for i,s in enumerate(substrings):
+            
+            index = categories[i].index(s)
+            category[i][index] = 1
+        pos = (torch.Tensor(object['pose'])[:2] - cam_pose[:2]) / cam_pose[3]
+        angle = torch.Tensor(object['pose'])[2]
+        orientation[0] = torch.cos(angle)
+        orientation[1] = torch.sin(angle)
+
+    embedding = torch.cat((category[0], category[1], category[2], layer, type, pos, orientation, area))
+
+    assert len(embedding) == node_encoding_dim
+
+    return embedding
+
+
+def encode_objects(objs, object_tokens, cam_pos):
+    embedded_objects = torch.zeros((len(object_tokens), node_encoding_dim))
+    for i, token in enumerate(object_tokens):
+        if token not in objs.keys():
+            continue
+
+        object = objs[token]
+
+        embedded_objects[i] = encode_object(object, cam_pos)
+    return embedded_objects
 
 # Pytorch interfaces
 
 class NuScenesDataset(Dataset):
         
-    def __init__(self, root, traj_list, pad_idx, n_class, n_query=8, obs_p=0.2, mode='test', input_type='nusc_bitmasks_scenegraphs'):
+    def __init__(self, root, traj_list, pad_idx, n_class, n_query=8, obs_p=0.2, mode='test', input_type='nusc_bitmasks_scenegraphs', pyg=False):
         self.root = root
         self.mode = mode
         self.traj_list = []
@@ -243,6 +304,7 @@ class NuScenesDataset(Dataset):
         self.pad_idx = pad_idx
         self.obs_p = obs_p
         self.input_type = input_type
+        self.pyg = pyg
         self.NONE = self.n_class - 1
 
         if self.mode == 'train' or self.mode == 'val':
@@ -270,8 +332,14 @@ class NuScenesDataset(Dataset):
         #keys are subfolders, values are extensions
         item = {}
 
+
         #read all files in
         for folder in folders_exts.keys():
+            if folder == 'scene_graphs_adj' and self.pyg:
+                continue
+            if folder == 'scene_graphs_pyg' and not self.pyg:
+                continue
+
             folder_path = self.root + '/' + folder
 
             if not os.path.exists(folder_path):
@@ -297,7 +365,6 @@ class NuScenesDataset(Dataset):
         start_frame = 0
 
         features = item['bitmasks'][start_frame : start_frame + observed_len]
-        sg_adj_matrices = item['scene_graphs'][start_frame : start_frame + observed_len]
         cam_poses = item['cam_poses'][start_frame : start_frame + observed_len]
         past_label = item['actions'][start_frame : start_frame + observed_len] #[S]
         objects = item['objects'][start_frame : start_frame + observed_len]
@@ -306,19 +373,24 @@ class NuScenesDataset(Dataset):
         #object_dict = { v:i for i,v in enumerate(object_tokens) } #maps token to index in object_tokens
 
         if self.input_type in ['nusc_bitmasks_scenegraphs', 'nusc_scenegraphs']:
-            # turn scene graphs into PyG data:
-            scene_graphs = []
-            for sg, objs, cam_pose in zip(sg_adj_matrices, objects, cam_poses):
-                node_features = self.encode_objects(objs, object_tokens, cam_pose)
+            if self.pyg:
+                scene_graphs = item['scene_graphs_pyg'][start_frame : start_frame + observed_len]
 
-                edge_index, edge_attr = dense_to_sparse(sg)
-                edge_attr = self.encode_edges(edge_attr)
-                edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
+            else:
+                sg_adj_matrices = item['scene_graphs_adj'][start_frame : start_frame + observed_len]
+                # turn scene graphs into PyG data:
+                scene_graphs = []
+                for sg, objs, cam_pose in zip(sg_adj_matrices, objects, cam_poses):
+                    node_features = encode_objects(objs, object_tokens, cam_pose)
 
-                node_features = mask_select(node_features, 0, mask)
+                    edge_index, edge_attr = dense_to_sparse(sg)
+                    edge_attr = encode_edges(edge_attr)
+                    edge_index, edge_attr, mask = remove_isolated_nodes(edge_index, edge_attr, num_nodes=len(node_features))
 
-                data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
-                scene_graphs.append(data)
+                    node_features = mask_select(node_features, 0, mask)
+
+                    data = Data(x=node_features, edge_attr=edge_attr, edge_index=edge_index)
+                    scene_graphs.append(data)
         else:
             scene_graphs = None
 
@@ -355,71 +427,6 @@ class NuScenesDataset(Dataset):
             final_item.update({'actions' : item['actions']})
  
         return final_item
-
-    def encode_edges(self, edge_attr):
-        encodings = []
-        for e in edge_attr:
-            one_hot = torch.eye(len(edge_labels))[int(e.item())]
-            encodings.append(one_hot)
-        return torch.stack(encodings)
-
-    def encode_object(self, object, cam_pose):
-        #fixed_dim = 5 + len(non_geometric_layers) + sum(len(categories[i]) for i in len(categories))
-        #poly_dim = dim - fixed_dim
-
-        type = torch.zeros(2)
-        layer = torch.zeros(len(non_geometric_layers))
-        category = [torch.zeros(len(c)) for c in categories]
-        pos = torch.zeros(2) # x, y relative to cam pos
-        orientation = torch.zeros(2) # cos(yaw), sin(yaw)
-        area = torch.zeros(1) #area as fraction of viewport area
-        if object['type'] == 'map':
-            type[0] = 1
-
-            layer_index = non_geometric_layers.index(object['layer'])
-            layer[layer_index] = 1
-
-            if object['layer'] == 'drivable_area':
-                geom = object['geoms'][0]
-                #possible edge case: geoms is a list of many Polygons, must be made into MultiPolygon
-            else:
-                geom = object['geom']
-            #normalize all values relative to viewport center, size
-            pos[0] = (geom.centroid.x - cam_pose[0]) / cam_pose[3]
-            pos[1] = (geom.centroid.y - cam_pose[1]) / cam_pose[3]
-            area[0] = geom.area / (4 * (cam_pose[3] ** 2))
-
-        else:
-            type[1] = 1
-            category_string = object['category']
-            substrings = category_string.split('.')
-            for i,s in enumerate(substrings):
-                
-                index = categories[i].index(s)
-                category[i][index] = 1
-            pos = (torch.Tensor(object['pose'])[:2] - cam_pose[:2]) / cam_pose[3]
-            angle = torch.Tensor(object['pose'])[2]
-            orientation[0] = torch.cos(angle)
-            orientation[1] = torch.sin(angle)
-
-        embedding = torch.cat((category[0], category[1], category[2], layer, type, pos, orientation, area))
-
-        assert len(embedding) == node_encoding_dim
-
-        return embedding
-
-
-    def encode_objects(self, objs, object_tokens, cam_pos):
-        embedded_objects = torch.zeros((len(object_tokens), node_encoding_dim))
-        for i, token in enumerate(object_tokens):
-            if token not in objs.keys():
-                continue
-
-            object = objs[token]
-
-            embedded_objects[i] = self.encode_object(object, cam_pos)
-        return embedded_objects
-        
 
     def my_collate(self, batch):
         '''custom collate function, gets inputs as a batch, output : batch'''

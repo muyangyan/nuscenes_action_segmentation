@@ -34,11 +34,11 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
             print('batch start %d' % i)
             optimizer.zero_grad()
             features, scene_graphs, past_label, trans_dur_future, trans_future_target = data
-            features = features.to(device) #[B, S, C]
-            past_label = past_label.to(device) #[B, S]
-            trans_dur_future = trans_dur_future.to(device)
-            trans_future_target = trans_future_target.to(device)
-            trans_dur_future_mask = (trans_dur_future != pad_idx).long().to(device)
+            features = features.to(device, non_blocking=True) #[B, S, C]
+            past_label = past_label.to(device, non_blocking=True) #[B, S]
+            trans_dur_future = trans_dur_future.to(device, non_blocking=True)
+            trans_future_target = trans_future_target.to(device, non_blocking=True)
+            trans_dur_future_mask = (trans_dur_future != pad_idx).long().to(device, non_blocking=True)
 
             B = trans_dur_future.size(0)
             target_dur = trans_dur_future*trans_dur_future_mask
@@ -46,7 +46,7 @@ def train(args, model, train_loader, optimizer, scheduler, criterion, model_save
             if args.input_type in ['i3d_transcript', 'nusc_bitmasks']:
                 inputs = (features, None, past_label)
             elif args.input_type in ['nusc_bitmasks_scenegraphs', 'nusc_scenegraphs']:
-                scene_graphs = [sg.to(device) for sg in scene_graphs] #[T,B,F] a list of PyG Batches (1 per timestep)
+                scene_graphs = [sg.to(device, non_blocking=True) for sg in scene_graphs] #[T,B,F] a list of PyG Batches (1 per timestep)
                 inputs = (features, scene_graphs, past_label)
             elif args.input_type == 'gt':
                 gt_features = past_label.int()
