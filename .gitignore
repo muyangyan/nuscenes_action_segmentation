@@ -1,2 +1,3 @@
 /dataset_generation/*.pkl
 /runs_useless/
+/dump_data/
