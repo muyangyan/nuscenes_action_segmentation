@@ -36,11 +36,19 @@ import pandas as pd
 #cudnn.benchmark, cudnn.deterministic = False, True
 
 data_path = '/data/Datasets/nuscenes_custom/data'
+custom_split_path = './custom_splits'
 
 def ddp_setup(rank, world_size):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
     init_process_group(backend='nccl', rank=rank, world_size=world_size)
+
+def get_custom_split(custom_split_path, file_path):
+    with open(os.path.join(custom_split_path, file_path + '.json'), 'r') as f:
+        split = json.load(f)
+        train_traj_list = [str(i) for i in split['train']]
+        test_traj_list = [str(i) for i in split['test']]
+    return train_traj_list, test_traj_list
 
 def get_split(data_path, split):
     with open(data_path + '/../splits.json', 'r') as f:
@@ -140,12 +148,16 @@ def main_predict(args):
     else:
         device = torch.device('cuda')
         print('using gpu')
-    print("Split : ", args.split)
+    if args.custom_split:
+        print("Custom split : ", args.custom_split)
+        _, test_traj_list = get_custom_split(custom_split_path, args.custom_split)
+    else:
+        print("Split : ", args.split)
+        _, test_traj_list = get_split(data_path, args.split)
 
     n_class = len(actions) + 1
     pad_idx = n_class + 1
 
-    _, test_traj_list = get_split(data_path, args.split)
 
     model = prepare_train_objs(args, n_class, pad_idx, device)
 
@@ -161,7 +173,7 @@ def main_predict(args):
     products_dfs = []
     results_dfs = []
     for obs_p in obs_perc :
-        testset = NuScenesDataset(data_path, test_traj_list, pad_idx, n_class, n_query=args.n_query, obs_p=obs_p, mode='test', input_type=args.input_type)
+        testset = NuScenesDataset(data_path, test_traj_list, pad_idx, n_class, n_query=args.n_query, obs_p=obs_p, mode='test', input_type=args.input_type, pyg=args.pyg)
         this_product, this_result = predict(args, testset, model, device)
         products_dfs.append(this_product)
         results_dfs.append(this_result)
@@ -172,8 +184,15 @@ def main_predict(args):
     results_path = os.path.join(args.save_path, args.test_run, 'results')
     if not os.path.exists(results_path):
         os.makedirs(results_path)
-    products_file = os.path.join(results_path, 'products.csv')
-    results_file = os.path.join(results_path, 'results.csv')
+    
+    if args.custom_split:
+        products_filename = 'products_' + args.custom_split + '.csv'
+        results_filename = 'results_' + args.custom_split + '.csv'
+    else:
+        products_filename = 'products.csv'
+        results_filename = 'results.csv'
+    products_file = os.path.join(results_path, products_filename)
+    results_file = os.path.join(results_path, results_filename)
 
     products_df.to_csv(products_file)
     results_df.to_csv(results_file)

@@ -39,7 +39,7 @@ colors_map = dict(drivable_area='#a6cee3',
                              traffic_light='#7e772e')
 
 #reading data
-folders_exts = {'cam_poses':'.pt', 'bitmasks':'.pt', 'scene_graphs':'.pt', 'actions':'.pt', 'objects':'.pkl', 'metadata':'.json'}
+folders_exts = {'cam_poses':'.pt', 'bitmasks':'.pt', 'scene_graphs_adj':'.pt', 'scene_graphs_pyg':'.pt', 'actions':'.pt', 'objects':'.pkl', 'metadata':'.json'}
 
 actions_dict = {val:idx for idx, val in enumerate(actions)}
 edges_dict = {val:idx for idx, val in enumerate(edge_labels)}
@@ -168,7 +168,7 @@ def get_label(node, object_list, objects):
 def get_color(node, object_list, objects):
     object = objects[ object_list[node] ]
     if object['type'] == 'map':
-        return 'blue'
+        return 'cyan'
     if object['type'] == 'instance':
         return 'red'
 
@@ -180,7 +180,7 @@ def get_layer(node, object_list, objects):
         return None
 
 
-def visualize_graph(adjacency_matrix, object_list, objects, layout, excluded_layers=None, k=3, iterations=50):
+def visualize_graph(adjacency_matrix, object_list, objects, layout, font_size=16, excluded_layers=None, k=3, iterations=50):
     # Convert PyTorch tensor to numpy array
     adj_matrix = adjacency_matrix.cpu().numpy()
 
@@ -217,11 +217,11 @@ def visualize_graph(adjacency_matrix, object_list, objects, layout, excluded_lay
     
     # Add labels to the nodes
     labels = {node: get_label(node, object_list, objects) for node in G.nodes()}
-    #nx.draw_networkx_labels(G, pos, labels, font_size=16)
+    nx.draw_networkx_labels(G, pos, labels, font_size=font_size)
 
     edge_labels_graph = {(u, v): edge_labels[ adj_matrix[u][v] ] for u, v in G.edges()}
     #edge_labels = {(u, v): adj_matrix[u][v] for u, v in G.edges()}
-    #nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_graph, font_size=16)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_graph, font_size=font_size)
 
     
     # Show the plot

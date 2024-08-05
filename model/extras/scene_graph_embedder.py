@@ -64,9 +64,10 @@ class SceneGraphEmbedding(nn.Module):
         else:
             #mask = [b==ego_index for b in batch]
             x = x[ego_mask]
-            remainder = max(batch) - len(ego_mask) 
-            if remainder > 0:
-                x = torch.cat((x,torch.zeros(remainder, x.size()[1])), 0)
+            if batch != None:
+                remainder = max(batch) - len(ego_mask) 
+                if remainder > 0:
+                    x = torch.cat((x,torch.zeros(remainder, x.size()[1])), 0)
 
             x = self.lin_out(x)
             

@@ -328,23 +328,18 @@ def get_frame_data(args, pose, frame):
 def create_pyg(args):
     print("JUST PYG")
     
-    version = args.version
-    viewport_radius = args.viewport_radius
     datafolder = args.datafolder
-    trajs_per_scene = args.trajs_per_scene
-    noise_radius = args.noise_radius
     start_idx = args.start_idx
     end_idx = args.end_idx
     overwrite = args.overwrite
+    reverse = args.reverse
 
-    nusc = NuScenes(version=version, dataroot=dataroot, verbose=True)
-    args.nusc = nusc
+    if reverse:
+        idxs = range(start_idx, end_idx, -1)
+    else:
+        idxs = range(start_idx, end_idx)
 
-    idxs = range(start_idx, end_idx)
-
-    for idx in idxs:
-        traj_idx = idx + start_idx
-
+    for traj_idx in idxs:
         if overwrite == False:
             if os.path.exists(datafolder + '/' + 'scene_graphs_pyg' + '/' + str(traj_idx) + '.pt'):
                 continue
@@ -375,6 +370,8 @@ def create_pyg(args):
         #no need to stack pyg scene graphs, we will simply torch.save them as a list of pyg Data objs
 
         path = os.path.join(datafolder, 'scene_graphs_pyg')
+        if not os.path.exists(path):
+            os.makedirs(path)
         torch.save(scene_graphs_pyg, path + '/' + name + '.pt')
         print('written:', name)
     print('done')
@@ -484,8 +481,11 @@ parser.add_argument('-r', '--viewport_radius', type=float, default=10)
 parser.add_argument('-d', '--bitmask_dim', type=tuple, default=(32,32))
 parser.add_argument('-l', '--layers', type=list, default=nusc_map_bs.non_geometric_layers)
 
+
 parser.add_argument('--start_idx', type=int, default=0)
 parser.add_argument('--end_idx', type=int, default=None)
+parser.add_argument('--reverse', action='store_true')
+
 
 parser.add_argument('--overwrite', type=bool, default=False)
 
@@ -493,7 +493,7 @@ parser.add_argument('--overwrite', type=bool, default=False)
 parser.add_argument('--map_buffer_radius', type=float, default=1)
 parser.add_argument('--instance_dist_threshhold', type=float, default=10)
 
-
+#add pyg to data
 parser.add_argument('--just_pyg', action='store_true')
 
 args = parser.parse_args()
